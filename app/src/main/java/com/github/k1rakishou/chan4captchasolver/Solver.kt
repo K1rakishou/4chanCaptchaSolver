@@ -1,20 +1,14 @@
 package com.github.k1rakishou.chan4captchasolver
 
 import android.content.Context
-import android.graphics.Bitmap
+import android.util.Log
 import java.io.FileInputStream
-import java.lang.StringBuilder
 import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
-import org.tensorflow.lite.support.common.TensorOperator
-import org.tensorflow.lite.support.common.TensorProcessor
-import org.tensorflow.lite.support.image.TensorImage
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
-import org.tensorflow.lite.task.vision.detector.ObjectDetector
 
 class Solver(
   private val context: Context
@@ -63,7 +57,7 @@ class Solver(
           sequence.joinToString { (char, prob) -> "\'$char\': ${prob}" }
         }
 
-      println("results=${results}")
+      Log.d(TAG, "results=${results}")
     }
   }
 
@@ -93,6 +87,10 @@ class Solver(
     val declaredLength = fileDescriptor.declaredLength
 
     return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
+  }
+
+  companion object {
+    private const val TAG = "Solver"
   }
 
 }

@@ -3,21 +3,20 @@ package com.github.k1rakishou.chan4captchasolver
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
-import androidx.compose.ui.geometry.Offset
-import androidx.core.graphics.withRotation
-import androidx.core.graphics.withScale
+import android.util.Log
 import androidx.core.graphics.withTranslation
 import com.github.k1rakishou.chan4captchasolver.data.CaptchaInfo
-import java.lang.RuntimeException
 import java.util.LinkedList
 
 @OptIn(ExperimentalUnsignedTypes::class)
 object Helpers {
+  private const val TAG = "Helpers"
   private val captchaBgColor = 0xFFEEEEEE.toInt()
+  const val maxOffset = 50
 
   fun combineBgWithFgWithBestDisorder(
     captchaInfo: CaptchaInfo,
-    sliderOffset: Int
+    customOffset: Float?,
   ): ResultImageData {
     val paint = Paint().apply {
       flags = Paint.ANTI_ALIAS_FLAG
@@ -28,7 +27,7 @@ object Helpers {
     val bgPixelsArgb = captchaInfo.bgPixelsArgb
     val fgPixelsArgb = captchaInfo.fgPixelsArgb!!
 
-    var bestDisorder = 999
+    var bestDisorder = 999f
     var bestImagePixels: IntArray? = null
     var bestOffset = -1
 
@@ -48,8 +47,13 @@ object Helpers {
     val fgBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
     val resultPixels = IntArray(resultBitmap.width * resultBitmap.height)
 
-    val offset = -sliderOffset
-//    for (offset in (0 downTo -50)) {
+    val offsets = if (customOffset != null) {
+      IntProgression.fromClosedRange(-customOffset.toInt(), -customOffset.toInt(), 1)
+    } else {
+      0 downTo -maxOffset
+    }
+
+    for (offset in offsets) {
       val canvas = Canvas(resultBitmap)
 
       // Fill the whole canvas with the captcha bg color (0xFFEEEEEE)
@@ -105,18 +109,19 @@ object Helpers {
       }
 
       resultBitmap.getPixels(resultPixels, 0, resultBitmap.width, 0, 0, resultBitmap.width, resultBitmap.height)
-      val disorder = calculateDisorder(resultPixels, width, height)
+
+      val disorder = calculateDisorder(resultPixels, resultBitmap.width, resultBitmap.height)
+      Log.d(TAG, "offset=${offset}, disorder=${disorder}, bestOffset=${bestOffset}, bestDisorder=${bestDisorder}")
 
       if (disorder < bestDisorder) {
         bestDisorder = disorder
-        bestImagePixels = resultPixels
+        bestImagePixels = resultPixels.clone()
         bestOffset = offset
       }
-//    }
+    }
 
     val resultImageData = ResultImageData(
-      bestDisorder = bestDisorder,
-      bestOffset = bestOffset,
+      bestOffset = -bestOffset,
       width = resultBitmap.width,
       height = resultBitmap.height,
       bestImagePixels = bestImagePixels!!
@@ -130,7 +135,6 @@ object Helpers {
   }
 
   class ResultImageData(
-    val bestDisorder: Int?,
     val bestOffset: Int?,
     val width: Int,
     val height: Int,
@@ -176,7 +180,7 @@ object Helpers {
     return byteArray
   }
 
-  private fun calculateDisorder(imagePixelsInput: IntArray, width: Int, height: Int): Int {
+  private fun calculateDisorder(imagePixelsInput: IntArray, width: Int, height: Int): Float {
     val pic = hashMapOf<Int, Int>()
     val visited = hashSetOf<Int>()
     val totalCount = width * height
@@ -194,6 +198,7 @@ object Helpers {
       var blackCount = 0
       val items = mutableListOf<Int>()
       val toVisit = LinkedList<Int>()
+      toVisit.push(idx)
 
       while (toVisit.isNotEmpty()) {
         val cc = toVisit.pop()
@@ -235,12 +240,12 @@ object Helpers {
       total = 1
     }
 
-    return res / total
+    return res.toFloat() / total.toFloat()
   }
 
   private fun black(x: UInt): Boolean {
-    // Get the R channel of RGBA
-    val r = ((x shr 24) and 0xFFu)
+    // Get the R channel of ARGB
+    val r = ((x shr 16) and 0xFFu)
 
     return r < 64u
   }
