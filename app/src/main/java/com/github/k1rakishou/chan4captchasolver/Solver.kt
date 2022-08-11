@@ -47,7 +47,7 @@ class Solver(
           probabilities.forEachIndexed { charIndex, probability ->
             val prob = probability / max
 
-            if (prob > 0.05 && prob <= 1f) {
+            if (prob > 0.05) {
               val char = charset.getOrNull(charIndex + 1) ?: ""
               sequence += Pair(char, prob)
             }
@@ -59,9 +59,11 @@ class Solver(
 
           return@mapNotNull sequence
         }
-        .map { sequence -> sequence.joinToString { (char, prob) -> "\'$char\': ${prob}" } }
+        .map { sequence ->
+          sequence.joinToString { (char, prob) -> "\'$char\': ${prob}" }
+        }
 
-      println()
+      println("results=${results}")
     }
   }
 

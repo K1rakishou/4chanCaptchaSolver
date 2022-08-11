@@ -2,31 +2,27 @@ package com.github.k1rakishou.chan4captchasolver
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Paint
 import androidx.compose.ui.geometry.Offset
 import androidx.core.graphics.withRotation
 import androidx.core.graphics.withScale
 import androidx.core.graphics.withTranslation
 import com.github.k1rakishou.chan4captchasolver.data.CaptchaInfo
+import java.lang.RuntimeException
 import java.util.LinkedList
 
 @OptIn(ExperimentalUnsignedTypes::class)
 object Helpers {
+  private val captchaBgColor = 0xFFEEEEEE.toInt()
 
   fun combineBgWithFgWithBestDisorder(
     captchaInfo: CaptchaInfo,
     sliderOffset: Int
   ): ResultImageData {
-    if (captchaInfo.bgPixelsArgb == null) {
-      val width = captchaInfo.fgBitmapPainter!!.intrinsicSize.width.toInt()
-      val height = captchaInfo.fgBitmapPainter!!.intrinsicSize.height.toInt()
-
-      return ResultImageData(
-        bestDisorder = null,
-        bestOffset = null,
-        width = width,
-        height = height,
-        bestImagePixels = captchaInfo.fgPixelsArgb!!
-      )
+    val paint = Paint().apply {
+      flags = Paint.ANTI_ALIAS_FLAG
+      color = captchaBgColor
+      style = Paint.Style.FILL
     }
 
     val bgPixelsArgb = captchaInfo.bgPixelsArgb
@@ -45,10 +41,10 @@ object Helpers {
     val canvasWidth = th
 
     val bgWidthDiff = canvasHeight - width
-    val fgWidthDiff = canvasHeight - width
+    val halfBgWidthDiff = bgWidthDiff / 2f
 
-    val resultBitmap = Bitmap.createBitmap(canvasWidth, captchaInfo.bgWidth!!, Bitmap.Config.ARGB_8888)
-    val bgBitmap = Bitmap.createBitmap(captchaInfo.bgWidth!!, height, Bitmap.Config.ARGB_8888)
+    val resultBitmap = Bitmap.createBitmap(canvasWidth, canvasHeight, Bitmap.Config.ARGB_8888)
+    var bgBitmap: Bitmap? = null
     val fgBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
     val resultPixels = IntArray(resultBitmap.width * resultBitmap.height)
 
@@ -56,24 +52,57 @@ object Helpers {
 //    for (offset in (0 downTo -50)) {
       val canvas = Canvas(resultBitmap)
 
+      // Fill the whole canvas with the captcha bg color (0xFFEEEEEE)
+      canvas.drawRect(0f, 0f, canvas.width.toFloat(), canvas.height.toFloat(), paint)
+
+      // Flip the image horizontally and then rotate it. I don't understand why we need to do this
+      // either. Probably the model was trained this way.
       canvas.scale(-scale.toFloat(), scale.toFloat())
       canvas.rotate(90f)
 
-//      canvas.withTranslation(x = -(bgWidthDiff / 2f)) {
-        canvas.withTranslation(x = offset.toFloat()) {
-          kotlin.run {
-            bgBitmap.setPixels(bgPixelsArgb, 0, captchaInfo.bgWidth!!, 0, 0, captchaInfo.bgWidth!! - bgWidthDiff, height)
-            canvas.drawBitmap(bgBitmap, 0f, 0f, null)
+      if (bgPixelsArgb != null) {
+        // Draw the background image in the center of the canvas
+        canvas.withTranslation(x = halfBgWidthDiff) {
+          canvas.withTranslation(x = offset.toFloat()) {
+            kotlin.run {
+              val bitmap = Bitmap.createBitmap(captchaInfo.bgWidth!!, height, Bitmap.Config.ARGB_8888)
+              bgBitmap = bitmap
+
+              bitmap.setPixels(bgPixelsArgb, 0, captchaInfo.bgWidth!!, 0, 0, captchaInfo.bgWidth!! - bgWidthDiff, height)
+              canvas.drawBitmap(bitmap, 0f, 0f, null)
+            }
           }
         }
-//      }
+      }
 
-//      canvas.withTranslation(x = -(bgWidthDiff / 2f)) {
+      // Draw the foreground image in the center of the canvas
+      canvas.withTranslation(x = halfBgWidthDiff) {
         kotlin.run {
           fgBitmap.setPixels(fgPixelsArgb, 0, width, 0, 0, width, height)
           canvas.drawBitmap(fgBitmap, 0f, 0f, null)
         }
-//      }
+      }
+
+      kotlin.run {
+        // Fill the leftmost part of the captcha image with the captcha bg color (0xFFEEEEEE).
+        // This will remove all the noise which helps with character recognition
+        canvas.drawRect(
+          0f,
+          0f,
+          halfBgWidthDiff,
+          resultBitmap.width.toFloat(),
+          paint
+        )
+
+        // The same but for the rightmost part of the captcha image
+        canvas.drawRect(
+          resultBitmap.height.toFloat() - (bgWidthDiff / 2f),
+          0f,
+          resultBitmap.height.toFloat(),
+          resultBitmap.width.toFloat(),
+          paint
+        )
+      }
 
       resultBitmap.getPixels(resultPixels, 0, resultBitmap.width, 0, 0, resultBitmap.width, resultBitmap.height)
       val disorder = calculateDisorder(resultPixels, width, height)
@@ -95,7 +124,7 @@ object Helpers {
 
     resultBitmap.recycle()
     fgBitmap.recycle()
-    bgBitmap.recycle()
+    bgBitmap?.recycle()
 
     return resultImageData
   }
