@@ -1,11 +1,17 @@
 package com.github.k1rakishou.chan4captchasolver
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.util.Base64
 import android.util.Log
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.core.graphics.withTranslation
 import com.github.k1rakishou.chan4captchasolver.data.CaptchaInfo
+import com.github.k1rakishou.chan4captchasolver.data.CaptchaInfoRaw
+import com.squareup.moshi.Moshi
 import java.util.LinkedList
 import kotlin.time.ExperimentalTime
 import kotlin.time.measureTimedValue
@@ -36,6 +42,43 @@ object Helpers {
     Log.d(TAG, "combineBgWithFgWithBestDisorder() took ${duration}")
 
     return resultImageData
+  }
+
+  fun getCaptchaInfo(moshi: Moshi, captchaJson: String): CaptchaInfo? {
+    val captchaInfoRawAdapter = moshi.adapter(CaptchaInfoRaw::class.java)
+    val testCaptchaInfoRaw = captchaInfoRawAdapter.fromJson(captchaJson)!!
+
+    val (bgBitmapPainter, bgPixels) = testCaptchaInfoRaw.bg?.let { bgBase64Img ->
+      val bgByteArray = Base64.decode(bgBase64Img, Base64.DEFAULT)
+      val bitmap = BitmapFactory.decodeByteArray(bgByteArray, 0, bgByteArray.size)
+
+      val pixels = IntArray(bitmap.width * bitmap.height)
+      bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+
+      return@let BitmapPainter(bitmap.asImageBitmap()) to pixels
+    } ?: (null to null)
+
+    val (fgBitmapPainter, imgPixels) = testCaptchaInfoRaw.img?.let { imgBase64Img ->
+      val imgByteArray = Base64.decode(imgBase64Img, Base64.DEFAULT)
+      val bitmap = BitmapFactory.decodeByteArray(imgByteArray, 0, imgByteArray.size)
+
+      val pixels = IntArray(bitmap.width * bitmap.height)
+      bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+
+      return@let BitmapPainter(bitmap.asImageBitmap()) to pixels
+    } ?: (null to null)
+
+    return CaptchaInfo(
+      bgBitmapPainter = bgBitmapPainter,
+      fgBitmapPainter = fgBitmapPainter!!,
+      bgPixelsArgb = bgPixels,
+      fgPixelsArgb = imgPixels,
+      challenge = testCaptchaInfoRaw.challenge!!,
+      startedAt = System.currentTimeMillis(),
+      ttlSeconds = testCaptchaInfoRaw.ttl!!,
+      imgWidth = testCaptchaInfoRaw.imgWidth,
+      bgWidth = testCaptchaInfoRaw.bgWidth
+    )
   }
 
   private suspend fun combineBgWithFgWithBestDisorderInternal(

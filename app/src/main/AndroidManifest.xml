@@ -13,6 +13,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Chan4CaptchaSolver"
         tools:targetApi="31">
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -24,6 +25,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <receiver
+            android:name=".SolverBoardcastReceiver"
+            android:exported="true"
+            android:enabled="true" >
+
+            <intent-filter>
+                <action android:name="com.github.k1rakishou.chan4captchasolver.get_info" />
+                <action android:name="com.github.k1rakishou.chan4captchasolver.solve_captcha" />
+            </intent-filter>
+
+        </receiver>
+
     </application>
 
 </manifest>

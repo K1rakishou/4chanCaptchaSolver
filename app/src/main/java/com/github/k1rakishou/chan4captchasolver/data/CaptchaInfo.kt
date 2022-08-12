@@ -7,8 +7,6 @@ import kotlin.math.abs
 
 
 class CaptchaInfo(
-  val boardCode: String,
-  val threadNo: Long?,
   val bgBitmapPainter: BitmapPainter?,
   val fgBitmapPainter: BitmapPainter?,
   val bgPixelsArgb: IntArray?,
