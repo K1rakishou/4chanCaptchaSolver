@@ -41,6 +41,7 @@ fun KurobaComposeSnappingSlider(
   slideOffsetState: MutableState<Float>,
   onValueChange: (Float) -> Unit,
   slideSteps: Int? = null,
+  enabled: Boolean,
   interactionSource: MutableInteractionSource = remember { MutableInteractionSource() }
 ) {
   val density = LocalDensity.current
@@ -114,7 +115,7 @@ fun KurobaComposeSnappingSlider(
           isRtl = false,
           rawOffset = rawOffsetState,
           gestureEndAction = gestureEndAction,
-          enabled = true
+          enabled = enabled
         )
         .draggable(
           state = draggableState,

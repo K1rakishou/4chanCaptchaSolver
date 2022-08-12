@@ -6,8 +6,12 @@ import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
+import kotlin.time.ExperimentalTime
+import kotlin.time.measureTimedValue
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
+import org.tensorflow.lite.gpu.CompatibilityList
+import org.tensorflow.lite.gpu.GpuDelegate
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
 
 class Solver(
@@ -15,12 +19,138 @@ class Solver(
 ) {
   private val charset = arrayOf("", "0", "2", "4", "8", "A", "D", "G", "H", "J", "K", "M", "N", "P", "Q", "R", "S", "T", "V", "W", "X", "Y")
   private val modelFile by lazy { loadModelFile() }
+  private val threadsCount = Runtime.getRuntime().availableProcessors().coerceAtLeast(2)
 
-  fun solve(height: Int, pixels: IntArray) {
+  @OptIn(ExperimentalTime::class)
+  fun solve(height: Int, pixels: IntArray): List<RecognizedSequence> {
+    val gpuDelegate = createGpuDelegate()
+
+    try {
+      val (results, duration) = measureTimedValue {
+        val recognizedSymbolsList = solveInternal(
+          gpuDelegate = gpuDelegate,
+          height = height,
+          pixels = pixels
+        )
+
+        return@measureTimedValue postProcess(recognizedSymbolsList)
+      }
+
+      Log.d(TAG, "solve() took ${duration}, results: ${results}")
+      return results
+    } finally {
+      gpuDelegate?.close()
+    }
+  }
+
+  private fun postProcess(recognizedSymbolsList: List<List<RecognizedSymbol>>): List<RecognizedSequence> {
+    data class Possibility(
+      val symbol: String,
+      val offset: Int,
+      val confidence: Float
+    )
+
+    data class Sequence(
+      val seq: List<Possibility>
+    )
+
+    val possibilitySequences = mutableListOf<Sequence>()
+    possibilitySequences += Sequence(emptyList())
+
+    recognizedSymbolsList.forEach { recognizedSymbols ->
+      if (recognizedSymbols.isEmpty()) {
+        return@forEach
+      }
+
+      if (recognizedSymbols.size == 1 && recognizedSymbols[0].symbol == "") {
+        return@forEach
+      }
+
+      val oldPossibilities = possibilitySequences.toMutableList()
+      possibilitySequences.clear()
+
+      oldPossibilities.forEach { possibility ->
+        recognizedSymbols.forEachIndexed { symbolOffset, recognizedSymbol ->
+          val seq = possibility.seq.toMutableList()
+          if (recognizedSymbol.symbol != "") {
+            seq += Possibility(recognizedSymbol.symbol, symbolOffset, recognizedSymbol.confidence)
+          }
+
+          possibilitySequences += Sequence(seq)
+        }
+      }
+    }
+
+    val resultMap = mutableMapOf<String, Float>()
+
+    possibilitySequences.forEach { sequence ->
+      var line = ""
+      var lastSym: String? = null
+      var lastOff = -1
+      var count = 0
+      var prob = 0f
+
+      sequence.seq.forEach { possibility ->
+        val symbol = possibility.symbol
+        val offset = possibility.offset
+        val confidence = possibility.confidence
+
+        if (symbol == lastSym && lastOff + 2 >= offset) {
+          return@forEach
+        }
+
+        line += symbol
+        lastSym = symbol
+        lastOff = offset
+        prob += confidence
+        count++
+      }
+
+      if(count > 0) {
+        prob /= count
+      }
+
+      if(prob > (resultMap[line] ?: -1f) || !resultMap.containsKey(line)) {
+        resultMap[line] = prob
+      }
+    }
+
+    var keys = resultMap.entries.sortedBy { it.value }.map { it.key }
+    val keysFitting = keys.filter { key -> key.length == 5 || key.length == 6 }
+    if (keysFitting.isNotEmpty()) {
+      keys = keysFitting
+    }
+
+    return keys.mapNotNull { sequence ->
+      val confidence = resultMap[sequence]
+        ?: return@mapNotNull null
+
+      return@mapNotNull RecognizedSequence(
+        sequence = sequence,
+        confidence = confidence
+      )
+    }
+  }
+
+  private fun solveInternal(
+    gpuDelegate: GpuDelegate?,
+    height: Int,
+    pixels: IntArray
+  ): List<List<RecognizedSymbol>> {
     val shape = intArrayOf(1, height, 80, 1)
     val byteBuffer = convertBitmapToByteBuffer(pixels, shape)
 
-    Interpreter(modelFile, Interpreter.Options()).use { interpreter ->
+    val options = Interpreter.Options().apply {
+      if (gpuDelegate != null) {
+        Log.d(TAG, "solve() using gpu delegate")
+        addDelegate(gpuDelegate)
+      } else {
+        Log.d(TAG, "solve() using cpu with ${threadsCount} threads")
+        numThreads = threadsCount
+      }
+    }
+
+    return Interpreter(modelFile, options).use { interpreter ->
       val inputIndex = 0
       val outputIndex = 0
 
@@ -31,33 +161,51 @@ class Solver(
       val buffer = tensor.asReadOnlyBuffer()
       val count = tensor.shape().reduce { acc, i -> acc * i }
 
-      val results = (0 until count)
+      return@use (0 until count)
         .map { index -> buffer.getFloat(index * 4) }
+        // Process results in chunks of size "charset.size" because that's how they are grouped together
         .chunked(charset.size)
         .mapNotNull { probabilities ->
-          val sequence = mutableListOf<Pair<String, Float>>()
+          val recognizedSymbols = mutableListOf<RecognizedSymbol>()
           val max = probabilities.maxBy { it }
 
           probabilities.forEachIndexed { charIndex, probability ->
             val prob = probability / max
 
             if (prob > 0.05) {
-              val char = charset.getOrNull(charIndex + 1) ?: ""
-              sequence += Pair(char, prob)
+              val symbol = charset.getOrNull(charIndex + 1) ?: ""
+              recognizedSymbols += RecognizedSymbol(symbol, prob)
             }
           }
 
-          if (sequence.isEmpty()) {
+          if (recognizedSymbols.isEmpty()) {
             return@mapNotNull null
           }
 
-          return@mapNotNull sequence
+          return@mapNotNull recognizedSymbols
         }
-        .map { sequence ->
-          sequence.joinToString { (char, prob) -> "\'$char\': ${prob}" }
-        }
+    }
+  }
 
-      Log.d(TAG, "results=${results}")
+  data class RecognizedSequence(
+    val sequence: String,
+    val confidence: Float
+  )
+
+  data class RecognizedSymbol(
+    val symbol: String,
+    val confidence: Float
+  )
+
+  private fun createGpuDelegate(): GpuDelegate? {
+    val compatList = CompatibilityList()
+
+    compatList.use { list ->
+      if (!list.isDelegateSupportedOnThisDevice) {
+        return null
+      }
+
+      return GpuDelegate(list.bestOptionsForThisDevice)
     }
   }
 

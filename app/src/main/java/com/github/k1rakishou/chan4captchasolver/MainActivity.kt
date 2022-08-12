@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.Button
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
@@ -28,6 +29,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,11 +49,11 @@ import com.github.k1rakishou.chan4captchasolver.ui.compose.KurobaComposeSnapping
 import com.github.k1rakishou.chan4captchasolver.ui.theme.Chan4CaptchaSolverTheme
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
-  private val testCaptchaJson = "{\"challenge\":\"XiFO8V3FJyFk9hCf.d8ac5d4d06af4834f2e0a728de0864ff0fcb0b4306cccaaddf48f8a3ddd8af30\",\"ttl\":120,\"cd\":4,\"img\":\"iVBORw0KGgoAAAANSUhEUgAAAR8AAABQAgMAAABdQJnTAAAACVBMVEUL9wvu7u4AAAB7lQvzAAAAAXRSTlMAQObYZgAABy1JREFUWIWFmF+L3DYQwLXHXWnv6QrnQPPUFA4u\\/hROIYX6abNYItZTAlkI\\/hQJxKXpUyino9zTbYgXez5l548kS969iyG5tTz6aTQzGo2k9GOPhaHNGgxAf1SyUY+C7gCmJQjuw8s2Nk\\/fAZnRRJB1AQRQhO4z8jsaOez43EP5P3z\\/Cn56BhLJJehqqVM+N4sQ14A0mvDFHYLssADVOcjsEaT1OcBS2IO2uuO\\/EL\\/xTHQJC2vfMkhvqLE7AtK6lfFd1A1\\/Nall41QzER2ig0DTLLWLPXC4DXPGbKopyOhELQLFcOiCG7Y8XAfkogy0ahPQrJbOjb0RCznWsSIu9CYDNcp2+VS9LXNQOYZmiq8zTeYxfkXIh7V6ercAzWPMSkJfnYWXtVpp0oViJczFukqd7wm0mF4OatDP2Ns\\/leIPTTnNzjBaqZOJ7Fg+BqqheKfim1IKR54s0s0wCysF9jsg9CvOh3qHLjjNLYHi1AyD9vjrOmOYDFTClubjjbQWEOWjpMM9tpZ5WtFrLSoHkKXVg3JspJZBP1NzmsUMtZYF9Z0flMg0IhBpzq\\/kHqUu5MucvUhjde6shG0VOuY2ItD7AGr1DAqmfutBP\\/o01HgrWL+sZtCo3ygVrE2\\/qiJaEp+uENCZbjtdDxxoXoNiCVofA4Wn20nrStv\\/aKX6QCOQE1AbQTSgV9iD6gSEAwtoTUt+G8acNeqOgMjsK3VWJ2bt0BYquPWFHoNoR6Au10hFQQFJQsWXHwbpQN9PHJuNHHNGKaQjoTa3kfKCM4gdgmbFNtrPWMDp2knErlrtQdHY2wQkfZU6VScyezEr5UoWuGWjrIPyAnrlQROBOB7FFwnIgJgVYMdxpnBRftQvqyAqINsnGnnQsNBoCqDhdQDB3SAgE0HjbKPJg0YPuvCgd+IfBHGcKdoQ9jv+WdgIgm8HIMqtKaiJINEIRlNOg4AwMDtO6jUaMHotgMYZ5Lx2J\\/2sUQm0Lr1GTsMBaBI5FOw5NPFfAjIJCPftbwIypOmUge7ARdB4BPQbbk0BBLcwCUgHUIdBxhzaYyMId5ME9CuBqJbxoKsNgkb22tkhSIMJIFwYJLZSAqo\\/BFd5la8M3MB48RBoa8PUnmCfDxG0gSMgZ8fTJSi4HzODBxUpqPGTYNAbATW93oyragY5D2p5C4waedApg0oYqqVG2HszqosIopVdIuj19F6XtBUcAf0Dh6Bn6Jp+5O85yA51X4Z1sQBBCnpy70HNXxg1Kw+qeedjEJyTfAT98hCo+MLfn2sqmjg8OEUyCOCTslyXgU7i6OsHxTbIQV7gqoE9gS4FZCJISnD09KwRdQ6g3REQa4RzO3OzRn8rqoDhExSJ1zIQL5EcJMmykqmVOwbdKM6ifX075KDqIdD1Jb0oGoozcQkugGo6Eiw1ehBUggedho1toDr6BncFK7EQcrYkjMp3j6AxAf1OoJXflTEIGQRspGIBWgU9dtRMARJSKJ8FCKTWAqr75pJAE59UpodAUwQNEbQT0GkAGUwyl2rL1kaLPQDSfjqT86ARteSc4CvXbsKtDkG0BtkEHtQw6PQQ5AVgKj3IJw5KdB6kMVbR9iy3uslBQNWbzDGArouGt+9QS9MwVva1bv817Ayrka1xGixDXkfiiLvQJxbon1FNTqCTkMqA60YBUdkioFsGXURfoQj+mGrMKfT95CMvMArtnyJo6AJoojqb532GNuozkK7YZRKFqB2FHMT6iJPr0AQQhnadgDSDnnpQw+m0jqB6asCXFnzKoiObExBX2VL\\/FAKqFiD+n0Ej6t+w+ryPaS58rQfRynP2ADRaRhgpE0XlczTIZKjqigcg\\/RLzvgdhLAz6mmODQRWBbG95Z6\\/lzNZ40I41GtFESS0fS7\\/O+cwmoBe8PB2DQt0qeyWC\\/iR\\/j1V6E8Eg5hoalIOMQa\\/YrKJRF0ANzf0KC25svh8PbyJmbkUufRjEtUWBHq5BDk3Ss8s04ofPa3yxI0veLUDUKmd4AUnPNrNREAw3RGSinuYwNhBvA94H0K45uETK70bIpQLCWezkTiW5QmjRhgJaYpagSjbhz\\/aLHH4EVCRGRIE1gsjJj4H4seA2d6M\\/iUJ2FbbmZVEj6HZ5rZPdjfiHQBCWTphG61h6EOOmGtkpgLYLkHUbf3GxmQ3E5XRzMsi4LxNxOWMevRpzcgPShlWmsTB3k8fNZ\\/5wuHTHQYZidouHaYy0cDNid15v+IyFX1Mm4uEK4AiIzOuoYkKNxEBzSGJBBnLM9hdQ9fQYCA3cyeYrTfZOTEVzMH08oWsy4rQZElC3AE1jFnTGShD40ZNLOg6PZzMou0ZFV+0X0WskLN3B9SIH7NsjU3PcVu4hv1szAVwuFgf8C\\/G4nraHa4c\\/fLZOQTy55SobbMgEESSXbs73Xh+ARlaxXK4MAhUtBU28P5I\\/HC0tezwHTZtja16KNLqbGv8HYtWMWDdN1IgAAAAASUVORK5CYII=\",\"img_width\":287,\"img_height\":80,\"bg\":\"iVBORw0KGgoAAAANSUhEUgAAAVAAAABQAQMAAAB1Ub8uAAAABlBMVEUAAADu7u6BVFV4AAAFwElEQVRIiXWXMY\\/cRBTHx+eIjUS0jpQmRcCHxAdIOqQc8X0DvkCUnIREy0kUgFhufFxDt0JUVKGjoaCMBMp6dUhLF0oqPBuXoNibINlhvfP4vzdjr\\/dyWLqzZ\\/zz3\\/\\/33nhmVlF3bPormtFlh6LCX7W675y6x\\/KLaH2J6kpOi74jd+hlR31B9ewS1F76JC0srXu0BJbAcOzbegCuqGz1qkfn7jbjr8Gw0yTGo5s+Dz0gCSm3rU616fKwDXqz09x63XQd+W44ZZ9K8hmYueuk7ax1Tw5fw+i8D6SRoExvkHYqBrToGxzKhrhUU26uh+YE3dpxBQBRD8T6LKjZRfdeqa8b\\/K3lScWvWrwacnZXtRDPpVf9O99B453A+xdKstrRDhq8lt8eLSkf3nqi2gtQ2aNPiWK+Rugwbe8pl98+TdNpj37rBhUVNS1Lslb5b6dyZBvNxBejXQxlScsp91kXSqql5CYkeTWjH\\/N4JCmieZPqVjm9VmkxpgSda6A28qMTX5CJkEdLFTcrFbFqxeisyCJWjWltOX0wko6gesJoTWkYc6SnDdC1USNGZxo9KeekYQUL1YR+aPdCvjEJmrCm7Mih8kGdsqFMfAGNKDBR+Dwhexw1YUG\\/eVX5oE7Z16EawQ7Q0IZAF7hxqJtwXmapRznXKV5Ke0ATiYhGJrpxtqHHIUG1yJSK+ikjzcCcAHXBJ9+b6CXiRBbgtXwdtUBpKagBitKpmDgD2XVBOSojaHsCEboy9qiUIYZxoIlTxStXeZa9x+VPkLBxYg73Dw2XHmj9O95kkpTRX6H6xbQCyqNnk6kxmWOlVPBuwmiRhjMUHmirs7soWN5m+zWjLZjSTBht7zrVcAqTQG2Z3REPmSpEFczSo3eAhvDK44sNLFlVKiWq1KFGXbu7YjSTkcWoUYlHcR7xGeh9QZM1UKsGqOT2p0MVbegRBmYKNBE0YAOG0fwbRrNxwGiDodJQvHGoToFeEVTdZNVTQdGDCJGkoIrjVlcPBG08qhyacgmASBlwbmZvf0mNDZYFpcf\\/i3Ij2NB1TRsbzJ\\/pdB8xBPSLQ22SXR059MShyJSu6CSYO6\\/oOIBXFWrS7S3l0DZukM85o8YeKKBKUHsNI1rtRfhKv\\/YoogK6EhSDNuhQuqVG11QYW36p96r5mtHPDcaooJXzOvpMhT\\/TAJVrg4DfMRiFSnWqrRohtTwtpHsOzcmpQlDRvw5VW7Th2z4DC0HXPFYU+P0L6MaPga2qd2TVgaC3lJuhKzmlsZJ8aqEWP3r0nvoIaITZdgJVPxE7lD9Em+7naY8ewW6FGwdQNqyqPcq7AKCWG1fh74E6CvipADUK\\/fy6q4qJNb0ZYwCP0SVhiap8BToTNKQJfwWCTvgzuK+slCBkr5Td5lCSqRJ7Lc8a+xMl+5nsxiRRQVpx4pAsmjcyd2unyguXqOKDIfMJnadBJqoN0Kdt2HsFikbaodkHNvxKVEOZ5KkNPMpzfc3okXUor\\/tn3w1QmaYZfSMIqTj3KFw1MFOfPTKVuo5ECbrkmgGdhmd0\\/mIkaAXUYEUsCqorhSkwE\\/QVx\\/VQUR5o+pAeCoopkp4GbrWueOw51SpZO2NKt5+yocqhlRu+eGOl638EbeilQ59hLcAE9rhCEDzNcWqwHFb6BS1aQTeYqmWfxeJYWlugIzwiUxj6jH5JuUN5W9j4\\/QCrtscQel+Tfz8\\/UlKVOnTtd29u5W5uU23HmqIO1bhRC+q2PF6VWBXnt\\/J+AxnKDYcmHeoOy8vUk6Rvx\\/I\\/HSOorSrRH\\/Kfh5X2ezZP5lDt9uvDnSZUH\\/WiM3cCyjdrj3odnwm3b\\/Bx8xrOR7HjtY+vocFG0Ms4Vdc72LqvaLj73D6juqzKf+06LT8\\/3UW5Wmei\\/pdIJ7R9brijqzvVgnzFul8FXZx9OcQPe+Ud9HOeQv70qttfEp1qTC4D59zCvozOtAtwNvgl4VzN8Pcf1oPiA8Ctbq0AAAAASUVORK5CYII=\",\"bg_width\":336}"
+  private val testCaptchaJson = "{\"challenge\":\"obM5pKOCtgYS5LdE.c93e8e836e749e8deb886833f36a55395a0f88f3a83325f9a0d67d42150375c1\",\"ttl\":120,\"cd\":13,\"img\":\"iVBORw0KGgoAAAANSUhEUgAAARsAAABQAgMAAABUqzmpAAAACVBMVEUL+Avu7u4AAACitRlfAAAAAXRSTlMAQObYZgAABxFJREFUWIWdmEuL20gQx9vGsyw+mWUUSI7L5hB9CgV2Lj5NhLqJdVuIQ6Y\\/hRfiPewpLFHYzGk8jIy6PuXWo1+SHSesYJi2uuunf1VXP5Xm507\\/78dZ+KIbJT9sp\\/XmGw23F38asAAFcTZvm94OyPoGZ\\/ze9BOgCxzb7qGE\\/Y\\/oMYU2ySH59w4AOuLAPZagz01f6+4s0rjcIf7XoO1Bix4s\\/j3i2DE2s93zv6SHMNAxZ0Pl6wkHHiYE\\/EOnyCZEbBswCJf+QkHFyMpS7Z9TNY44vc4jVqJTrdejw2cmHILLa18LvZnEUVNsWgxU5LgQ2Y1UwyOBvHM2GD2LnOZKag7kTaYH9i6z4a4sRZKOGcovjgK6nfG\\/PzhEQQ\\/ZDZ18hH3gPtC3MPaXPgd\\/SblSKQZfI6eGJQmmyqjnNG7M2UvaKEVKKeBrahPGF7A6qtxQZRDimjyohuIvnEYpChD5uD7wbxFQYrQOWiqTntTB2\\/Yr\\/fsF+4dDdqvUzKf0Rri+gzq0\\/VSpWc7JR7bhsM3Bf4E5VsdhEv1yGKPdSqnNSI+E9CqUHlTpu7BSSkkIxhyLduVuoQI2JHhDKR+7ZqeWQKnmOdkTODQAjZpJLxBnJyLWe3Kh8K2VmvucQkx8m3N4QlSqwkrSCoNSAV\\/F6KMyNebcnHAaym21QhNH5g\\/yOYscpUL0hfMIxSZwrGgyfeSgOTZbIGdLnB2LwMTbkzE3qglOgf5SWH55Rd9hkEl6NOuZiQsGRESdc1qCU6A7nLEiZ2BMxuGcUJW4MIgx6bn1LjR14ujEod5rTzmrWSwqnv64h9Gkhn+Y8xOHOePgMLB95HTeeDHitDh4hfMKw7KkkqJxKPXzQua7fdtFTsitmfz2Iig72XjuUIblUsbBVwA1TyW5Hjaucg5EzhG9OeXQUiqTex4fNl5xkY1nmZ4jWn+Y+rXGlW+gCehwylnknDUtlPzcgzaD53Seo\\/T6yP1uz3BmIXHxofnvAgeb3jFn7U45+PsQOOi580WbcfrU1OL+okPZI45YFNrnMHP6U866yzj3rAf6sxy4jhwvbUalBy6+Mpl0exQOyk5zWuC0IBY4Jnsf0UUJNBsyJw+BdYnjphxtI0f\\/OMdvY3BQnnJc4KwSp0icDhPsw0SP+S7HeE4b+6s3JdxP4tMeLnGqjLOOnA7H1nEfOPRsdX04Ex+3vcihec7h4Eocp3E7dIbjfOaqxHn5JsbHvgAaqrmeNQxwhvN+f8pJcebZp4UhcXibd4ZjhbOYcMxO6mm7w7si91Y4RN5HThs4YXomTpFzRA\\/v\\/ViD11Pzahs576ecFXFqeXuV\\/ILO8l4M3Bvh0K6mSJw7GZH0PRmyKywWXuUVbQdHHF37ecOgmEM+Lj4kzm9UqJgj9K51Iz3mnrb\\/ntOn8UXR+jdyHp+4uzLOxxf5\\/IN6epn5EqeKnKfIgRMOfNJhfhbONnC2zLnTu8hxXJobz1mMOIVO86rEx3MsRc64OnGApc2Ic2DO\\/Ec473Dd0OUAwnlOtZ+4Z0wnnBVzLCfqnA3P6wHJIOHQwRA+SqZgij1+n9N5Dp2pKKQr385YVkEZIPSKdhmRA27M4YMmcXhJxKXBL7a00D5UnnOIHMwVErwEOppk+42kh\\/YnfTmERZv0PK0k4lDgnD9TGUfhjDfh0POZxwVC+EzH3+NT5UJW1p52nMhZRw4GTXvOz4ljnhTPGgdK9sjBde112KQiZyGckpejotCBsxwmepDzVY85t1XcSWN3zdYoFx6oQSnHL2pawlDn\\/U6crFLW2VXc2eNp4YrPNPqEA8M859Tgphz9+zJwsO+uZQAWGLSMc03pvs44IKdyHqi1cIyDwBkq2WPosq\\/UVdmbdL4o46mXOGsvhyuNcCzEs63bLYEdLzHDihuateI5pcw58fB+y2OT1qMj8EKJG1E4unBrgUaUC6xHznG2f5lzEhTHJopjzlHzRr2lsnwIXSJnGx05+J2cE37Q+dRQ7MhWunBrjkdfxMMNBm97Ez8plxUmcuJxj8\\/LvJgcQ170+sv983hXgxzbx0\\/yf1bUdv4eILskaISz5yYmadXiUuD487tYxvNOF30taCrqfh28ZXbfIy5Z76S\\/T2hdio883k8aANAZTqjN+MjM\\/WElf\\/Ttsoh63Pi8IxwYulKkpe6oucAuvfZ3UsZ3ItVsTzmGF2tvv\\/E6G0lU2rbTC7eRhvkNTqNGt2v2GXPyu6j3vfaHeXSJNRSkkziZ6UQP72hck98CUE5Lr6FLyLmhi7ADc+wlTlGOOYYvG\\/Qb8bpYs4twuKynoXXBTa+5aG8i\\/YuHMOGEMfcNDo71woa7kPigKW1d+dTPnO13OB3lA3E+55zaydTCLnEuOHORQ0nV8WJWjHx1NS9+LIWHpmzm8lYjTkjyesQxuJVlGxsHifN3XKlZ8x+rNisRTB9dygAAAABJRU5ErkJggg==\",\"img_width\":283,\"img_height\":80,\"bg\":\"iVBORw0KGgoAAAANSUhEUgAAAUwAAABQAQMAAABIw95IAAAABlBMVEUAAADu7u6BVFV4AAAFmUlEQVRIiYWXz27cVBTGj3Gou0B12BUp1NM1EuquQURxERIseYRGYsG2VTeVKLHLSASJxbwAUvoEfQGgdhpBlmEHK+ZGg9TleFSkcbDnHr5zru2xO5G4o5nMXP383e+c+++E+MpWJxtdBW1iZ3iXu\\/H\\/oSu856L6ZEMW6PIqA9ZeZWDG2g2tTX8bqqV8O+8MtC27wmsl38b6u9xUK3uoM3vWqfZ8rPRt1eI6A\\/MWt\\/GbkbokD5M11c+kGaFxBgv70tuiFW8+wrxYq9q4RaXzdCOiRkCTOVCdbaCD5tA6ks+Naat6JloUQb\\/RpvLkYtmLYtUYOEz6nNG0LbjCZ9QOVj8gTbkNuUv9uYw55Wopn\\/OMe6qCWS9qu+BbxywVmg\\/DivBKnVtk0LzXxBTJSKdDNMOrQTHb9FC\\/4Olwzt28zbqJnaZtDmyg2bGhoXCiBmSupktFJZrjNRo7lMg7dyEVj9YG0IIObWYCaNL4TP0BOumhTpx8zjV7NQ1R9VoN0MCh02KIVpoB3RljZE7Ra3wCtDod5wN0wenHbFT1jLPVWRlZ2kpEtXrpC2rjXNAF\\/2FEdSFpX0p27hNQivNApMLcn7ItaQ60UtVYrUp6\\/BVTVEM1VTSGquGSGgOX7WzxK2vRswX0GisaJDklCy5HDXrRoBM+qnfQ8xfQSNESiaAAAxYN+hToa\\/wMbWD3SVdAHjrVr4BS0qG1B\\/Rbrsy8CDhxaOFQJBBoIOEIOiu8LLWUFAfn+TVmQX1BJfcrQXc79MJ4QVq8NS2xFCQgWV5AU3IzmVN81BowRDfoIJqsOKWtj4yi9TahRRlSCFTmyt4hLg+IrtO9ZCoCoxFtvRAUYHEDA79WdAlVbMNSngeqY6HdiOBV0fCpLP\\/UqYoBhx506FaIxfKEbgG94MVrPBRjIzXo7bRV\\/Y5oD8m3tEO3vCJecVUVgtZJg34A9BMN9jl5NWVAbwJ9FrsE0N21apzqhKD7M0HZoSOK0WkfUd+rootxxvmHgsaKRgXtHAL5YoiOgXq\\/QfXwHaDQAhobehuISVKKeuiEyPpY1Lnd8+p7AigqO0WS1UeZqJRjJ8fKKeUmywXdBlp\\/CRQz8UsPNWLIONSdvmbbA+oD9Tib9NFkjWpYsZ5tqaA4krIrVZMG\\/VtorNmUDoJMvVpF07xBoeLQRGcUGykdHX7uwrK7tG\\/9NP8aDk1VJkTzyvpTQXdCLoBSskxa1b3HYXpSFnfZLPgF3Tv\\/\\/dBDPrETPUZegNrDNln7Jkx\\/rQrZ72Y\\/yNObtkEvmFQVk92GlYd5yYrSXpzT+9iGii4YUwe07KNlkRRII9Mu0EjRkqJLQXNBNa\\/1Y0GPS9kQopp06AOH7gmatcnK4\\/FKthlQyw4tcFHdv\\/yXAuub5HHPAI7Velu8+rKBcTstC6QyuXw39Qu6JV7L6Rq1d\\/aAjhtUbgQcTT\\/Vfo4lIKio2uuC2vBh3kdZUeaX9IC+aVHmOJVzHadlkeEqe4bTVdBMUCvrRwwYReXwG+MUBnp5qqrUqZY7oaLNUfzPLuHYxAxWxqgBcqhcI9XPMVCsPIcWI9KCLDUk15m53qKy2FYsqqZB6xYlh1JzU+HE1j+IaQcPO9TvUEyu+Z60CEJErowirj894gYNFc3pTjqCyp93m3sRJn\\/Us92e4BmHxssxZOqgSBdTR+mlbEI+5K5pXm8zh7VEUB8NqrjS7\\/9S9BVyWMaidywXUqdqvQ0UbVwnE1cSoRZyBS9Om5MWQ2lkO9R2NSNmqb7PynWV2zHPshZ92hvJ8EoS0i8RA56\\/ugpdcIZCaNWWiOIGARwDPeuhUn6e\\/cCT+eDJuZiTpa0eL1x3LSFMh7X7sim2xMB83akrZNAEG3foTIVxb86G\\/+VE4lar9dVQFffmiXhdz1dnY\\/5GsR806Sn6wl2DbvEfaywzg2+EPQgAAAAASUVORK5CYII=\",\"bg_width\":332}"
   private val moshi by Dependencies.moshi
 
   private val solver by lazy { Solver(this.applicationContext) }
@@ -70,6 +72,7 @@ class MainActivity : ComponentActivity() {
             modifier = Modifier
               .wrapContentHeight()
               .fillMaxWidth()
+              .padding(horizontal = 16.dp)
           ) {
             BuildCaptchaWindow()
           }
@@ -99,8 +102,7 @@ class MainActivity : ComponentActivity() {
       return
     }
 
-    var initialAdjustmentHappened by remember { mutableStateOf(false) }
-    var skipNext by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
 
     var currentInputValue by captchaInfo.currentInputValue
     val scrollValueState = captchaInfo.sliderValue
@@ -109,11 +111,38 @@ class MainActivity : ComponentActivity() {
     var bitmapPainterMut by remember { mutableStateOf<BitmapPainter?>(null) }
     val bitmapPainter = bitmapPainterMut
 
+    var solving by remember { mutableStateOf(false) }
+
+    suspend fun solveCaptchaFunc(scroll: Float?) {
+      solveCaptcha(
+        captchaInfo = captchaInfo,
+        scrollValue = scroll,
+        onStarted = { solving = true },
+        onFinished = { newSliderValue, results, resultBitmapPainter ->
+          if (newSliderValue != null) {
+            scrollValue = newSliderValue
+          }
+
+          if (results.isNotEmpty()) {
+            currentInputValue = results.first().sequence
+          }
+
+          bitmapPainterMut = resultBitmapPainter
+          solving = false
+        }
+      )
+    }
+
+    // Auto solve upon entering the composition
+    LaunchedEffect(
+      key1 = Unit,
+      block = { solveCaptchaFunc(scroll = null) }
+    )
+
     TextField(
       modifier = Modifier
         .fillMaxWidth()
-        .wrapContentHeight()
-        .padding(horizontal = 16.dp),
+        .wrapContentHeight(),
       value = currentInputValue,
       onValueChange = { newValue -> currentInputValue = newValue.uppercase(Locale.ENGLISH) },
       keyboardOptions = KeyboardOptions(
@@ -121,12 +150,13 @@ class MainActivity : ComponentActivity() {
         keyboardType = KeyboardType.Password
       ),
       maxLines = 1,
-      singleLine = true
+      singleLine = true,
+      enabled = !solving
     )
 
     Spacer(modifier = Modifier.height(8.dp))
 
-    Text(text = "Offset=${scrollValue * SLIDE_STEPS}")
+    Text(text = "Offset=${(scrollValue * SLIDE_STEPS).toInt()}")
 
     Spacer(modifier = Modifier.height(8.dp))
 
@@ -137,56 +167,28 @@ class MainActivity : ComponentActivity() {
           slideSteps = SLIDE_STEPS,
           modifier = Modifier
             .wrapContentHeight()
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-          onValueChange = { newValue -> scrollValueState.value = newValue }
+            .fillMaxWidth(),
+          onValueChange = { newValue -> scrollValueState.value = newValue },
+          enabled = !solving
         )
       }
     }
 
     Spacer(modifier = Modifier.height(8.dp))
 
-    LaunchedEffect(
-      key1 = scrollValue,
-      block = {
-        if (skipNext) {
-          skipNext = false
-          return@LaunchedEffect
-        }
-
-        delay(1000)
-
-        withContext(Dispatchers.IO) {
-          val offset = if (initialAdjustmentHappened) {
-            scrollValue * Helpers.maxOffset
-          } else {
-            null
-          }
-
-          val resultImageData = Helpers.combineBgWithFgWithBestDisorder(
-            captchaInfo = captchaInfo,
-            customOffset = offset
-          )
-
-          val width = resultImageData.width
-          val height = resultImageData.height
-          val bestOffset = resultImageData.bestOffset
-
-          val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-          bitmap.setPixels(resultImageData.bestImagePixels, 0, width, 0, 0, width, height)
-
-          if (bestOffset != null) {
-            scrollValue = resultImageData.bestOffset.toFloat() / Helpers.maxOffset.toFloat()
-            skipNext = true
-          }
-
-          bitmapPainterMut = BitmapPainter(bitmap.asImageBitmap())
-
-          solver.solve(height, resultImageData.bestImagePixels)
-          initialAdjustmentHappened = true
+    Button(
+      onClick = { coroutineScope.launch { solveCaptchaFunc(scroll = scrollValue) } },
+      enabled = !solving,
+      content = {
+        if (solving) {
+          Text(text = "Solving...")
+        } else {
+          Text(text = "Solve")
         }
       }
     )
+
+    Spacer(modifier = Modifier.height(8.dp))
 
     if (bitmapPainter != null) {
       Image(
@@ -195,6 +197,50 @@ class MainActivity : ComponentActivity() {
         contentScale = Scale(3f),
         contentDescription = null
       )
+    }
+  }
+
+  private suspend fun solveCaptcha(
+    captchaInfo: CaptchaInfo,
+    scrollValue: Float?,
+    onStarted: () -> Unit,
+    onFinished: (newSliderValue: Float?, results: List<Solver.RecognizedSequence>, resultBitmapPainter: BitmapPainter) -> Unit
+  ) {
+    withContext(Dispatchers.IO) {
+      withContext(Dispatchers.Main) {
+        onStarted()
+      }
+
+      val offset = if (scrollValue == null) {
+        null
+      } else {
+        scrollValue * captchaInfo.widthDiff()
+      }
+
+      val resultImageData = Helpers.combineBgWithFgWithBestDisorder(
+        captchaInfo = captchaInfo,
+        customOffset = offset
+      )
+
+      val width = resultImageData.width
+      val height = resultImageData.height
+      val bestOffset = resultImageData.bestOffset
+
+      val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+      bitmap.setPixels(resultImageData.bestImagePixels, 0, width, 0, 0, width, height)
+
+      val adjustedScrollValue = if (scrollValue == null && bestOffset != null) {
+        resultImageData.bestOffset.toFloat() / captchaInfo.widthDiff().toFloat()
+      } else {
+        null
+      }
+
+      val bitmapPainter = BitmapPainter(bitmap.asImageBitmap())
+      val results = solver.solve(height, resultImageData.bestImagePixels)
+
+      withContext(Dispatchers.Main) {
+        onFinished(adjustedScrollValue, results, bitmapPainter)
+      }
     }
   }
 
@@ -246,24 +292,22 @@ class MainActivity : ComponentActivity() {
   ) {
     val fgBitmapPainter = captchaInfo.fgBitmapPainter!!
 
-    val scale = Math.min(
-      size.width.toFloat() / fgBitmapPainter.intrinsicSize.width,
-      size.height.toFloat() / fgBitmapPainter.intrinsicSize.height
-    )
+    val scale = 4f
 
-    val contentScale = Scale(scale)
+    val contentScale = remember(key1 = scale) { Scale(scale) }
     var scrollValue by captchaInfo.sliderValue
 
     if (captchaInfo.bgBitmapPainter != null) {
       val bgBitmapPainter = captchaInfo.bgBitmapPainter
-      val offset = remember(key1 = scrollValue) {
-        val xOffset = (captchaInfo.bgInitialOffset + MIN_OFFSET + (scrollValue * MAX_OFFSET * -1f)).toInt()
-        IntOffset(x = xOffset, y = 0)
+
+      val offset = remember(key1 = scrollValue, key2 = scale) {
+        val xOffset = scrollValue * captchaInfo.widthDiff() * scale * -1
+        IntOffset(x = xOffset.toInt(), y = 0)
       }
 
       Image(
         modifier = Modifier
-          .fillMaxSize()
+          .wrapContentSize()
           .offset { offset },
         painter = bgBitmapPainter,
         contentScale = contentScale,
@@ -271,9 +315,10 @@ class MainActivity : ComponentActivity() {
       )
     }
 
+
     Image(
       modifier = Modifier
-        .fillMaxSize(),
+        .wrapContentSize(),
       painter = fgBitmapPainter,
       contentScale = contentScale,
       contentDescription = null
@@ -304,16 +349,6 @@ class MainActivity : ComponentActivity() {
       return@let BitmapPainter(bitmap.asImageBitmap()) to pixels
     } ?: (null to null)
 
-    val bgInitialOffset = if (testCaptchaInfoRaw.bgWidth != null && testCaptchaInfoRaw.imgWidth != null) {
-      if (testCaptchaInfoRaw.bgWidth > testCaptchaInfoRaw.imgWidth) {
-        testCaptchaInfoRaw.bgWidth - testCaptchaInfoRaw.imgWidth
-      } else {
-        testCaptchaInfoRaw.imgWidth - testCaptchaInfoRaw.bgWidth
-      }
-    } else {
-      0
-    }
-
     return CaptchaInfo(
       boardCode = "vg",
       threadNo = 394579078L,
@@ -324,7 +359,6 @@ class MainActivity : ComponentActivity() {
       challenge = testCaptchaInfoRaw.challenge!!,
       startedAt = System.currentTimeMillis(),
       ttlSeconds = testCaptchaInfoRaw.ttl!!,
-      bgInitialOffset = bgInitialOffset.toFloat(),
       imgWidth = testCaptchaInfoRaw.imgWidth,
       bgWidth = testCaptchaInfoRaw.bgWidth
     )

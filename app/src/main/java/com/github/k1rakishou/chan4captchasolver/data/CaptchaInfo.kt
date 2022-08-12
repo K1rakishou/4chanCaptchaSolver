@@ -16,24 +16,18 @@ class CaptchaInfo(
   val challenge: String,
   val startedAt: Long,
   val ttlSeconds: Int,
-  val bgInitialOffset: Float,
   val imgWidth: Int?,
   val bgWidth: Int?
 ) {
   var currentInputValue = mutableStateOf<String>("")
   var sliderValue = mutableStateOf(0f)
 
-  fun widthDiff(): Int? {
+  fun widthDiff(): Int {
     if (imgWidth == null || bgWidth == null) {
-      return null
+      return 0
     }
 
-    val diff = abs(imgWidth - bgWidth)
-    if (diff == 0) {
-      return null
-    }
-
-    return diff
+    return abs(imgWidth - bgWidth)
   }
 
   fun reset() {

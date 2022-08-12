@@ -55,6 +55,7 @@ dependencies {
     implementation 'androidx.activity:activity-compose:1.5.1'
 
     implementation "org.tensorflow:tensorflow-lite:${tf_version}"
+    implementation "org.tensorflow:tensorflow-lite-gpu:${tf_version}"
     implementation 'org.tensorflow:tensorflow-lite-task-vision:0.4.1'
     implementation "org.tensorflow:tensorflow-lite-select-tf-ops:${tf_version}"
 

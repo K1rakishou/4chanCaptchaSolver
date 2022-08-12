@@ -7,16 +7,41 @@ import android.util.Log
 import androidx.core.graphics.withTranslation
 import com.github.k1rakishou.chan4captchasolver.data.CaptchaInfo
 import java.util.LinkedList
+import kotlin.time.ExperimentalTime
+import kotlin.time.measureTimedValue
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
 
 @OptIn(ExperimentalUnsignedTypes::class)
 object Helpers {
   private const val TAG = "Helpers"
   private val captchaBgColor = 0xFFEEEEEE.toInt()
-  const val maxOffset = 50
 
-  fun combineBgWithFgWithBestDisorder(
+  @OptIn(ExperimentalTime::class)
+  suspend fun combineBgWithFgWithBestDisorder(
     captchaInfo: CaptchaInfo,
     customOffset: Float?,
+  ): ResultImageData {
+    val (resultImageData, duration) = measureTimedValue {
+      coroutineScope {
+        combineBgWithFgWithBestDisorderInternal(
+          coroutineScope = this,
+          captchaInfo = captchaInfo,
+          customOffset = customOffset
+        )
+      }
+    }
+
+    Log.d(TAG, "combineBgWithFgWithBestDisorder() took ${duration}")
+
+    return resultImageData
+  }
+
+  private suspend fun combineBgWithFgWithBestDisorderInternal(
+    coroutineScope: CoroutineScope,
+    captchaInfo: CaptchaInfo,
+    customOffset: Float?
   ): ResultImageData {
     val paint = Paint().apply {
       flags = Paint.ANTI_ALIAS_FLAG
@@ -29,7 +54,7 @@ object Helpers {
 
     var bestDisorder = 999f
     var bestImagePixels: IntArray? = null
-    var bestOffset = -1
+    var bestOffset = customOffset?.toInt() ?: -1
 
     val width = captchaInfo.fgBitmapPainter!!.intrinsicSize.width.toInt()
     val height = captchaInfo.fgBitmapPainter!!.intrinsicSize.height.toInt()
@@ -50,10 +75,11 @@ object Helpers {
     val offsets = if (customOffset != null) {
       IntProgression.fromClosedRange(-customOffset.toInt(), -customOffset.toInt(), 1)
     } else {
-      0 downTo -maxOffset
+      0 downTo -(captchaInfo.widthDiff())
     }
 
     for (offset in offsets) {
+      coroutineScope.ensureActive()
       val canvas = Canvas(resultBitmap)
 
       // Fill the whole canvas with the captcha bg color (0xFFEEEEEE)
@@ -109,9 +135,7 @@ object Helpers {
       }
 
       resultBitmap.getPixels(resultPixels, 0, resultBitmap.width, 0, 0, resultBitmap.width, resultBitmap.height)
-
       val disorder = calculateDisorder(resultPixels, resultBitmap.width, resultBitmap.height)
-      Log.d(TAG, "offset=${offset}, disorder=${disorder}, bestOffset=${bestOffset}, bestDisorder=${bestDisorder}")
 
       if (disorder < bestDisorder) {
         bestDisorder = disorder
@@ -119,6 +143,8 @@ object Helpers {
         bestOffset = offset
       }
     }
+
+    Log.d(TAG, "combineBgWithFgWithBestDisorder() bestOffset=${bestOffset}, bestDisorder=${bestDisorder}")
 
     val resultImageData = ResultImageData(
       bestOffset = -bestOffset,
@@ -141,53 +167,14 @@ object Helpers {
     val bestImagePixels: IntArray
   )
 
-  private fun ubyteArrayToIntArray(
-    bytes: UByteArray,
-    width: Int,
-    height: Int
-  ): IntArray {
-    val intArray = IntArray(width * height) { 0xFFEEEEEE.toInt() }
-    var intArrayIndex = 0
-
-    for (offset in (0 until (bytes.size - 4)) step 4) {
-      var argb = 0u
-      argb = argb or ((bytes[offset + 0] and 0xFF.toUByte()).toUInt() shl 24)
-      argb = argb or ((bytes[offset + 1] and 0xFF.toUByte()).toUInt() shl 16)
-      argb = argb or ((bytes[offset + 2] and 0xFF.toUByte()).toUInt() shl 8)
-      argb = argb or ((bytes[offset + 3] and 0xFF.toUByte()).toUInt() shl 0)
-
-      intArray[intArrayIndex] = argb.toInt()
-      ++intArrayIndex
-    }
-
-    return intArray
-  }
-
-  private fun intArrayToArgbArray(
-    pixelsArgb: IntArray,
-    width: Int,
-    height: Int
-  ): UByteArray {
-    val byteArray = UByteArray(width * height * 4)
-
-    for ((index, argb) in pixelsArgb.withIndex()) {
-      byteArray[index + 0] = (argb ushr 24).toUByte()
-      byteArray[index + 1] = (argb ushr 16).toUByte()
-      byteArray[index + 2] = (argb ushr 8).toUByte()
-      byteArray[index + 3] = argb.toUByte()
-    }
-
-    return byteArray
-  }
-
   private fun calculateDisorder(imagePixelsInput: IntArray, width: Int, height: Int): Float {
-    val pic = hashMapOf<Int, Int>()
-    val visited = hashSetOf<Int>()
     val totalCount = width * height
+    val pic = Array<Byte>(totalCount) { 0 }
+    val visited = Array<Int>(totalCount) { 0 }
     val imagePixels = imagePixelsInput.toUIntArray()
 
     for (idx in 0 until totalCount) {
-      if (visited.contains(idx)) {
+      if (visited[idx] > 0) {
         continue
       }
 
@@ -203,9 +190,10 @@ object Helpers {
       while (toVisit.isNotEmpty()) {
         val cc = toVisit.pop()
 
-        if (!visited.add(cc)) {
+        if (visited[cc] > 0) {
           continue
         }
+        visited[cc] = 1
 
         if (black(imagePixels[cc])) {
           items += cc
@@ -231,7 +219,7 @@ object Helpers {
         res += 1
       }
 
-      if (pic[idx] != 0) {
+      if (pic[idx] > 0) {
         total += 1
       }
     }
