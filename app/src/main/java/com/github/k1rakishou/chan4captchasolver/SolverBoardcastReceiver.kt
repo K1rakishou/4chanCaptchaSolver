@@ -93,7 +93,7 @@ class SolverBoardcastReceiver : BroadcastReceiver() {
     }
 
     val scrollValue = intent.getFloatExtra(ACTION_SOLVE_CAPTCHA_SLIDER_OFFSET, -1f)
-      .takeIf { it >= 0f }
+      .takeIf { it in 0f..1f }
 
     val offset = if (scrollValue == null) {
       null
@@ -107,10 +107,10 @@ class SolverBoardcastReceiver : BroadcastReceiver() {
     )
 
     val height = resultImageData.height
-    val bestOffset = resultImageData.bestOffset
+    val adjustedScroll = resultImageData.adjustedScroll
 
-    val adjustedScrollValue = if (scrollValue == null && bestOffset != null) {
-      resultImageData.bestOffset.toFloat() / captchaInfo.widthDiff().toFloat()
+    val adjustedScrollValue = if (scrollValue == null && adjustedScroll != null) {
+      adjustedScroll
     } else {
       null
     }

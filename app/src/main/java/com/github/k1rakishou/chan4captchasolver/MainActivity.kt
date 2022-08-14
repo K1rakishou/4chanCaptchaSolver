@@ -2,18 +2,24 @@ package com.github.k1rakishou.chan4captchasolver
 
 import android.graphics.Bitmap
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.rememberScrollableState
+import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.text.KeyboardOptions
@@ -46,11 +52,11 @@ import com.github.k1rakishou.chan4captchasolver.ui.compose.KurobaComposeSnapping
 import com.github.k1rakishou.chan4captchasolver.ui.theme.Chan4CaptchaSolverTheme
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
-  private val testCaptchaJson = "{\"challenge\":\"obM5pKOCtgYS5LdE.c93e8e836e749e8deb886833f36a55395a0f88f3a83325f9a0d67d42150375c1\",\"ttl\":120,\"cd\":13,\"img\":\"iVBORw0KGgoAAAANSUhEUgAAARsAAABQAgMAAABUqzmpAAAACVBMVEUL+Avu7u4AAACitRlfAAAAAXRSTlMAQObYZgAABxFJREFUWIWdmEuL20gQx9vGsyw+mWUUSI7L5hB9CgV2Lj5NhLqJdVuIQ6Y\\/hRfiPewpLFHYzGk8jIy6PuXWo1+SHSesYJi2uuunf1VXP5Xm507\\/78dZ+KIbJT9sp\\/XmGw23F38asAAFcTZvm94OyPoGZ\\/ze9BOgCxzb7qGE\\/Y\\/oMYU2ySH59w4AOuLAPZagz01f6+4s0rjcIf7XoO1Bix4s\\/j3i2DE2s93zv6SHMNAxZ0Pl6wkHHiYE\\/EOnyCZEbBswCJf+QkHFyMpS7Z9TNY44vc4jVqJTrdejw2cmHILLa18LvZnEUVNsWgxU5LgQ2Y1UwyOBvHM2GD2LnOZKag7kTaYH9i6z4a4sRZKOGcovjgK6nfG\\/PzhEQQ\\/ZDZ18hH3gPtC3MPaXPgd\\/SblSKQZfI6eGJQmmyqjnNG7M2UvaKEVKKeBrahPGF7A6qtxQZRDimjyohuIvnEYpChD5uD7wbxFQYrQOWiqTntTB2\\/Yr\\/fsF+4dDdqvUzKf0Rri+gzq0\\/VSpWc7JR7bhsM3Bf4E5VsdhEv1yGKPdSqnNSI+E9CqUHlTpu7BSSkkIxhyLduVuoQI2JHhDKR+7ZqeWQKnmOdkTODQAjZpJLxBnJyLWe3Kh8K2VmvucQkx8m3N4QlSqwkrSCoNSAV\\/F6KMyNebcnHAaym21QhNH5g\\/yOYscpUL0hfMIxSZwrGgyfeSgOTZbIGdLnB2LwMTbkzE3qglOgf5SWH55Rd9hkEl6NOuZiQsGRESdc1qCU6A7nLEiZ2BMxuGcUJW4MIgx6bn1LjR14ujEod5rTzmrWSwqnv64h9Gkhn+Y8xOHOePgMLB95HTeeDHitDh4hfMKw7KkkqJxKPXzQua7fdtFTsitmfz2Iig72XjuUIblUsbBVwA1TyW5Hjaucg5EzhG9OeXQUiqTex4fNl5xkY1nmZ4jWn+Y+rXGlW+gCehwylnknDUtlPzcgzaD53Seo\\/T6yP1uz3BmIXHxofnvAgeb3jFn7U45+PsQOOi580WbcfrU1OL+okPZI45YFNrnMHP6U866yzj3rAf6sxy4jhwvbUalBy6+Mpl0exQOyk5zWuC0IBY4Jnsf0UUJNBsyJw+BdYnjphxtI0f\\/OMdvY3BQnnJc4KwSp0icDhPsw0SP+S7HeE4b+6s3JdxP4tMeLnGqjLOOnA7H1nEfOPRsdX04Ex+3vcihec7h4Eocp3E7dIbjfOaqxHn5JsbHvgAaqrmeNQxwhvN+f8pJcebZp4UhcXibd4ZjhbOYcMxO6mm7w7si91Y4RN5HThs4YXomTpFzRA\\/v\\/ViD11Pzahs576ecFXFqeXuV\\/ILO8l4M3Bvh0K6mSJw7GZH0PRmyKywWXuUVbQdHHF37ecOgmEM+Lj4kzm9UqJgj9K51Iz3mnrb\\/ntOn8UXR+jdyHp+4uzLOxxf5\\/IN6epn5EqeKnKfIgRMOfNJhfhbONnC2zLnTu8hxXJobz1mMOIVO86rEx3MsRc64OnGApc2Ic2DO\\/Ec473Dd0OUAwnlOtZ+4Z0wnnBVzLCfqnA3P6wHJIOHQwRA+SqZgij1+n9N5Dp2pKKQr385YVkEZIPSKdhmRA27M4YMmcXhJxKXBL7a00D5UnnOIHMwVErwEOppk+42kh\\/YnfTmERZv0PK0k4lDgnD9TGUfhjDfh0POZxwVC+EzH3+NT5UJW1p52nMhZRw4GTXvOz4ljnhTPGgdK9sjBde112KQiZyGckpejotCBsxwmepDzVY85t1XcSWN3zdYoFx6oQSnHL2pawlDn\\/U6crFLW2VXc2eNp4YrPNPqEA8M859Tgphz9+zJwsO+uZQAWGLSMc03pvs44IKdyHqi1cIyDwBkq2WPosq\\/UVdmbdL4o46mXOGsvhyuNcCzEs63bLYEdLzHDihuateI5pcw58fB+y2OT1qMj8EKJG1E4unBrgUaUC6xHznG2f5lzEhTHJopjzlHzRr2lsnwIXSJnGx05+J2cE37Q+dRQ7MhWunBrjkdfxMMNBm97Ez8plxUmcuJxj8\\/LvJgcQ170+sv983hXgxzbx0\\/yf1bUdv4eILskaISz5yYmadXiUuD487tYxvNOF30taCrqfh28ZXbfIy5Z76S\\/T2hdio883k8aANAZTqjN+MjM\\/WElf\\/Ttsoh63Pi8IxwYulKkpe6oucAuvfZ3UsZ3ItVsTzmGF2tvv\\/E6G0lU2rbTC7eRhvkNTqNGt2v2GXPyu6j3vfaHeXSJNRSkkziZ6UQP72hck98CUE5Lr6FLyLmhi7ADc+wlTlGOOYYvG\\/Qb8bpYs4twuKynoXXBTa+5aG8i\\/YuHMOGEMfcNDo71woa7kPigKW1d+dTPnO13OB3lA3E+55zaydTCLnEuOHORQ0nV8WJWjHx1NS9+LIWHpmzm8lYjTkjyesQxuJVlGxsHifN3XKlZ8x+rNisRTB9dygAAAABJRU5ErkJggg==\",\"img_width\":283,\"img_height\":80,\"bg\":\"iVBORw0KGgoAAAANSUhEUgAAAUwAAABQAQMAAABIw95IAAAABlBMVEUAAADu7u6BVFV4AAAFmUlEQVRIiYWXz27cVBTGj3Gou0B12BUp1NM1EuquQURxERIseYRGYsG2VTeVKLHLSASJxbwAUvoEfQGgdhpBlmEHK+ZGg9TleFSkcbDnHr5zru2xO5G4o5nMXP383e+c+++E+MpWJxtdBW1iZ3iXu\\/H\\/oSu856L6ZEMW6PIqA9ZeZWDG2g2tTX8bqqV8O+8MtC27wmsl38b6u9xUK3uoM3vWqfZ8rPRt1eI6A\\/MWt\\/GbkbokD5M11c+kGaFxBgv70tuiFW8+wrxYq9q4RaXzdCOiRkCTOVCdbaCD5tA6ks+Naat6JloUQb\\/RpvLkYtmLYtUYOEz6nNG0LbjCZ9QOVj8gTbkNuUv9uYw55Wopn\\/OMe6qCWS9qu+BbxywVmg\\/DivBKnVtk0LzXxBTJSKdDNMOrQTHb9FC\\/4Olwzt28zbqJnaZtDmyg2bGhoXCiBmSupktFJZrjNRo7lMg7dyEVj9YG0IIObWYCaNL4TP0BOumhTpx8zjV7NQ1R9VoN0MCh02KIVpoB3RljZE7Ra3wCtDod5wN0wenHbFT1jLPVWRlZ2kpEtXrpC2rjXNAF\\/2FEdSFpX0p27hNQivNApMLcn7ItaQ60UtVYrUp6\\/BVTVEM1VTSGquGSGgOX7WzxK2vRswX0GisaJDklCy5HDXrRoBM+qnfQ8xfQSNESiaAAAxYN+hToa\\/wMbWD3SVdAHjrVr4BS0qG1B\\/Rbrsy8CDhxaOFQJBBoIOEIOiu8LLWUFAfn+TVmQX1BJfcrQXc79MJ4QVq8NS2xFCQgWV5AU3IzmVN81BowRDfoIJqsOKWtj4yi9TahRRlSCFTmyt4hLg+IrtO9ZCoCoxFtvRAUYHEDA79WdAlVbMNSngeqY6HdiOBV0fCpLP\\/UqYoBhx506FaIxfKEbgG94MVrPBRjIzXo7bRV\\/Y5oD8m3tEO3vCJecVUVgtZJg34A9BMN9jl5NWVAbwJ9FrsE0N21apzqhKD7M0HZoSOK0WkfUd+rootxxvmHgsaKRgXtHAL5YoiOgXq\\/QfXwHaDQAhobehuISVKKeuiEyPpY1Lnd8+p7AigqO0WS1UeZqJRjJ8fKKeUmywXdBlp\\/CRQz8UsPNWLIONSdvmbbA+oD9Tib9NFkjWpYsZ5tqaA4krIrVZMG\\/VtorNmUDoJMvVpF07xBoeLQRGcUGykdHX7uwrK7tG\\/9NP8aDk1VJkTzyvpTQXdCLoBSskxa1b3HYXpSFnfZLPgF3Tv\\/\\/dBDPrETPUZegNrDNln7Jkx\\/rQrZ72Y\\/yNObtkEvmFQVk92GlYd5yYrSXpzT+9iGii4YUwe07KNlkRRII9Mu0EjRkqJLQXNBNa\\/1Y0GPS9kQopp06AOH7gmatcnK4\\/FKthlQyw4tcFHdv\\/yXAuub5HHPAI7Velu8+rKBcTstC6QyuXw39Qu6JV7L6Rq1d\\/aAjhtUbgQcTT\\/Vfo4lIKio2uuC2vBh3kdZUeaX9IC+aVHmOJVzHadlkeEqe4bTVdBMUCvrRwwYReXwG+MUBnp5qqrUqZY7oaLNUfzPLuHYxAxWxqgBcqhcI9XPMVCsPIcWI9KCLDUk15m53qKy2FYsqqZB6xYlh1JzU+HE1j+IaQcPO9TvUEyu+Z60CEJErowirj894gYNFc3pTjqCyp93m3sRJn\\/Us92e4BmHxssxZOqgSBdTR+mlbEI+5K5pXm8zh7VEUB8NqrjS7\\/9S9BVyWMaidywXUqdqvQ0UbVwnE1cSoRZyBS9Om5MWQ2lkO9R2NSNmqb7PynWV2zHPshZ92hvJ8EoS0i8RA56\\/ugpdcIZCaNWWiOIGARwDPeuhUn6e\\/cCT+eDJuZiTpa0eL1x3LSFMh7X7sim2xMB83akrZNAEG3foTIVxb86G\\/+VE4lar9dVQFffmiXhdz1dnY\\/5GsR806Sn6wl2DbvEfaywzg2+EPQgAAAAASUVORK5CYII=\",\"bg_width\":332}"
   private val moshi by Dependencies.moshi
   private val solver by lazy { Solver(this.applicationContext) }
 
@@ -79,7 +85,7 @@ class MainActivity : ComponentActivity() {
 
   @Composable
   private fun BuildCaptchaWindow() {
-    val captchaInfo = remember { Helpers.getCaptchaInfo(moshi, testCaptchaJson) }
+    val captchaInfo = remember { Helpers.getCaptchaInfo(moshi, loadCaptcha()) }
 
     BuildCaptchaWindowImageOrText(captchaInfo)
 
@@ -172,17 +178,23 @@ class MainActivity : ComponentActivity() {
 
     Spacer(modifier = Modifier.height(8.dp))
 
-    Button(
-      onClick = { coroutineScope.launch { solveCaptchaFunc(scroll = scrollValue) } },
-      enabled = !solving,
-      content = {
-        if (solving) {
-          Text(text = "Solving...")
-        } else {
-          Text(text = "Solve")
+    Row {
+      Button(
+        onClick = { coroutineScope.launch { solveCaptchaFunc(scroll = scrollValue) } },
+        enabled = !solving,
+        content = {
+          if (solving) {
+            Text(text = "Solving...")
+          } else {
+            Text(text = "Solve")
+          }
         }
-      }
-    )
+      )
+
+      Spacer(modifier = Modifier.width(32.dp))
+
+      RunTestsButton()
+    }
 
     Spacer(modifier = Modifier.height(8.dp))
 
@@ -190,10 +202,78 @@ class MainActivity : ComponentActivity() {
       Image(
         modifier = Modifier.wrapContentSize(),
         painter = bitmapPainter,
-        contentScale = Scale(3f),
+        contentScale = Scale(2f),
         contentDescription = null
       )
     }
+  }
+
+  @Composable
+  private fun RunTestsButton() {
+    val coroutineScope = rememberCoroutineScope()
+    var job by remember { mutableStateOf<Job?>(null) }
+    var currentTestIndex by remember { mutableStateOf(0) }
+    var totalTestsCount by remember { mutableStateOf(0) }
+
+    Button(
+      onClick = {
+        job?.cancel()
+        job = coroutineScope.launch(Dispatchers.IO) {
+          coroutineContext[Job.Key]!!.invokeOnCompletion {
+            job = null
+          }
+
+          // Some of the captchas in the captchas_for_tests.txt file have incorrect answers but
+          // those answers are the same in the browser script version
+          // (see https://github.com/AUTOMATIC1111/4chan-captcha-solver),
+          // meaning those are the bugs in the model itself which I can't fix (I am not a ML expert).
+          // They are still considered "correct" because the tests are only used to prove that the
+          // solutions received in this app are the same as the solutions from the script.
+          val testCaptchas = loadTestCaptcha()
+
+          currentTestIndex = 0
+          totalTestsCount = testCaptchas.size
+
+          var correct = 0
+          var incorrect = 0
+
+          testCaptchas.forEachIndexed { index, pair ->
+            currentTestIndex = index
+
+            val captchaJson = pair.first
+            val captchaAnswer = pair.second
+            val captchaInfo = Helpers.getCaptchaInfo(moshi, captchaJson)!!
+
+            val resultImageData = Helpers.combineBgWithFgWithBestDisorder(
+              captchaInfo = captchaInfo,
+              customOffset = null
+            )
+
+            val height = resultImageData.height
+            val results = solver.solve(height, resultImageData.bestImagePixels)
+
+            if (results.first().sequence.equals(other = captchaAnswer, ignoreCase = true)) {
+              correct++
+            } else {
+              incorrect++
+            }
+          }
+
+          currentTestIndex = totalTestsCount
+
+          withContext(Dispatchers.Main) {
+            Toast.makeText(this@MainActivity, "Tests finished. Solved: ${correct}, failed: ${incorrect}", Toast.LENGTH_LONG).show()
+          }
+        }
+      },
+      content = {
+        if (job == null) {
+          Text(text = "Run tests")
+        } else {
+          Text(text = "Cancel (${currentTestIndex}/${totalTestsCount})")
+        }
+      }
+    )
   }
 
   private suspend fun solveCaptcha(
@@ -220,13 +300,13 @@ class MainActivity : ComponentActivity() {
 
       val width = resultImageData.width
       val height = resultImageData.height
-      val bestOffset = resultImageData.bestOffset
+      val adjustedScroll = resultImageData.adjustedScroll
 
       val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
       bitmap.setPixels(resultImageData.bestImagePixels, 0, width, 0, 0, width, height)
 
-      val adjustedScrollValue = if (scrollValue == null && bestOffset != null) {
-        resultImageData.bestOffset.toFloat() / captchaInfo.widthDiff().toFloat()
+      val adjustedScrollValue = if (scrollValue == null && adjustedScroll != null) {
+        adjustedScroll
       } else {
         null
       }
@@ -242,12 +322,8 @@ class MainActivity : ComponentActivity() {
 
   @Composable
   private fun BuildCaptchaWindowImageOrText(captchaInfo: CaptchaInfo?) {
-    var height by remember { mutableStateOf(160.dp) }
-
     BoxWithConstraints(
-      modifier = Modifier
-        .wrapContentHeight()
-        .height(height)
+      modifier = Modifier.wrapContentSize()
     ) {
       val size = with(LocalDensity.current) {
         remember(key1 = maxWidth, key2 = maxHeight) {
@@ -273,7 +349,6 @@ class MainActivity : ComponentActivity() {
 //              )
             }
           } else {
-            height = 160.dp
             BuildCaptchaImageNormal(captchaInfo, size)
           }
         }
@@ -286,39 +361,107 @@ class MainActivity : ComponentActivity() {
     captchaInfo: CaptchaInfo,
     size: IntSize
   ) {
-    val fgBitmapPainter = captchaInfo.fgBitmapPainter!!
-
+    val imgBitmapPainter = requireNotNull(captchaInfo.fgBitmapPainter) { "fgBitmapPainter must not be null!" }
     val scale = 4f
 
     val contentScale = remember(key1 = scale) { Scale(scale) }
     var scrollValue by captchaInfo.sliderValue
 
-    if (captchaInfo.bgBitmapPainter != null) {
-      val bgBitmapPainter = captchaInfo.bgBitmapPainter
+    val offset = remember(key1 = scrollValue, key2 = scale) {
+      val xOffset = (captchaInfo.widthDiff() * scale) + ((scrollValue * 2) * captchaInfo.widthDiff() * scale * -1)
+      IntOffset(x = xOffset.toInt(), y = 0)
+    }
 
-      val offset = remember(key1 = scrollValue, key2 = scale) {
-        val xOffset = scrollValue * captchaInfo.widthDiff() * scale * -1
-        IntOffset(x = xOffset.toInt(), y = 0)
+    Column {
+      if (captchaInfo.bgBitmapPainter != null) {
+        val bgBitmapPainter = captchaInfo.bgBitmapPainter
+
+        Image(
+          modifier = Modifier
+            .wrapContentSize()
+            .offset { offset },
+          painter = bgBitmapPainter,
+          contentScale = contentScale,
+          contentDescription = null,
+        )
       }
+
+      val scrollState = rememberScrollableState { delta ->
+        var newScrollValue = scrollValue + ((delta * 2f) / size.width.toFloat())
+
+        if (newScrollValue < 0f) {
+          newScrollValue = 0f
+        } else if (newScrollValue > 1f) {
+          newScrollValue = 1f
+        }
+
+        scrollValue = newScrollValue
+
+        return@rememberScrollableState delta
+      }
+
+      Spacer(modifier = Modifier.height(4.dp))
 
       Image(
         modifier = Modifier
           .wrapContentSize()
-          .offset { offset },
-        painter = bgBitmapPainter,
+          .scrollable(state = scrollState, orientation = Orientation.Horizontal),
+        painter = imgBitmapPainter,
         contentScale = contentScale,
-        contentDescription = null,
+        contentDescription = null
       )
+
+      Spacer(modifier = Modifier.height(4.dp))
+
+      Box {
+        if (captchaInfo.bgBitmapPainter != null) {
+          val bgBitmapPainter = captchaInfo.bgBitmapPainter
+
+          Image(
+            modifier = Modifier
+              .wrapContentSize()
+              .offset { offset },
+            painter = bgBitmapPainter,
+            contentScale = contentScale,
+            contentDescription = null,
+          )
+        }
+
+        Image(
+          modifier = Modifier
+            .wrapContentSize(),
+          painter = imgBitmapPainter,
+          contentScale = contentScale,
+          contentDescription = null
+        )
+      }
+    }
+  }
+
+  private fun loadCaptcha(): String {
+    val captchasRaw = assets.open("captchas.txt").use { stream ->
+      String(stream.readBytes())
     }
 
+    return captchasRaw.split('\n').first()
+  }
 
-    Image(
-      modifier = Modifier
-        .wrapContentSize(),
-      painter = fgBitmapPainter,
-      contentScale = contentScale,
-      contentDescription = null
-    )
+  private fun loadTestCaptcha(): List<Pair<String, String>> {
+    val captchasRaw = assets.open("captchas_for_tests.txt").use { stream ->
+      String(stream.readBytes())
+    }
+
+    val linePairs = captchasRaw.split('\n').filter { it.isNotBlank() }.chunked(2)
+    val result = mutableListOf<Pair<String, String>>()
+
+    linePairs.forEach { linePair ->
+      val captcha = linePair[0].trim()
+      val answer = linePair[1].trim()
+
+      result += Pair(captcha, answer)
+    }
+
+    return result
   }
 
   class Scale(
@@ -330,9 +473,6 @@ class MainActivity : ComponentActivity() {
   }
 
   companion object {
-    private const val MIN_OFFSET = 100f
-    private const val MAX_OFFSET = 400f
-
     private const val SLIDE_STEPS = 50
   }
 

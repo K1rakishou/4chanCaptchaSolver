@@ -81,7 +81,7 @@ object Helpers {
     )
   }
 
-  private suspend fun combineBgWithFgWithBestDisorderInternal(
+  private fun combineBgWithFgWithBestDisorderInternal(
     coroutineScope: CoroutineScope,
     captchaInfo: CaptchaInfo,
     customOffset: Float?
@@ -137,11 +137,13 @@ object Helpers {
         // Draw the background image in the center of the canvas
         canvas.withTranslation(x = halfBgWidthDiff) {
           canvas.withTranslation(x = offset.toFloat()) {
+            val bgWidth = captchaInfo.bgWidth!!
+
             kotlin.run {
-              val bitmap = Bitmap.createBitmap(captchaInfo.bgWidth!!, height, Bitmap.Config.ARGB_8888)
+              val bitmap = Bitmap.createBitmap(bgWidth, height, Bitmap.Config.ARGB_8888)
               bgBitmap = bitmap
 
-              bitmap.setPixels(bgPixelsArgb, 0, captchaInfo.bgWidth!!, 0, 0, captchaInfo.bgWidth!! - bgWidthDiff, height)
+              bitmap.setPixels(bgPixelsArgb, 0, bgWidth, 0, 0, bgWidth - bgWidthDiff, height)
               canvas.drawBitmap(bitmap, 0f, 0f, null)
             }
           }
@@ -169,7 +171,7 @@ object Helpers {
 
         // The same but for the rightmost part of the captcha image
         canvas.drawRect(
-          resultBitmap.height.toFloat() - (bgWidthDiff / 2f),
+          resultBitmap.height.toFloat() - halfBgWidthDiff,
           0f,
           resultBitmap.height.toFloat(),
           resultBitmap.width.toFloat(),
@@ -187,10 +189,17 @@ object Helpers {
       }
     }
 
-    Log.d(TAG, "combineBgWithFgWithBestDisorder() bestOffset=${bestOffset}, bestDisorder=${bestDisorder}")
+    // Transform current offset into 0..1 range
+    val pixelsPerOffset = (resultBitmap.height / Math.abs(offsets.last).toFloat())
+    val adjustedScroll = (pixelsPerOffset * Math.abs(bestOffset)) / resultBitmap.height
+
+    Log.d(TAG, "combineBgWithFgWithBestDisorder() " +
+      "adjustedScroll=${adjustedScroll}, " +
+      "bestOffset=${bestOffset}, " +
+      "bestDisorder=${bestDisorder}")
 
     val resultImageData = ResultImageData(
-      bestOffset = -bestOffset,
+      adjustedScroll = adjustedScroll,
       width = resultBitmap.width,
       height = resultBitmap.height,
       bestImagePixels = bestImagePixels!!
@@ -204,7 +213,7 @@ object Helpers {
   }
 
   class ResultImageData(
-    val bestOffset: Int?,
+    val adjustedScroll: Float?,
     val width: Int,
     val height: Int,
     val bestImagePixels: IntArray

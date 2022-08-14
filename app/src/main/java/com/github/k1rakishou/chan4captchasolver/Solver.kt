@@ -57,23 +57,23 @@ class Solver(
     val possibilitySequences = mutableListOf<Sequence>()
     possibilitySequences += Sequence(emptyList())
 
-    recognizedSymbolsList.forEach { recognizedSymbols ->
+    recognizedSymbolsList.forEachIndexed { offset, recognizedSymbols ->
       if (recognizedSymbols.isEmpty()) {
-        return@forEach
+        return@forEachIndexed
       }
 
       if (recognizedSymbols.size == 1 && recognizedSymbols[0].symbol == "") {
-        return@forEach
+        return@forEachIndexed
       }
 
       val oldPossibilities = possibilitySequences.toMutableList()
       possibilitySequences.clear()
 
       oldPossibilities.forEach { possibility ->
-        recognizedSymbols.forEachIndexed { symbolOffset, recognizedSymbol ->
+        recognizedSymbols.forEach { recognizedSymbol ->
           val seq = possibility.seq.toMutableList()
           if (recognizedSymbol.symbol != "") {
-            seq += Possibility(recognizedSymbol.symbol, symbolOffset, recognizedSymbol.confidence)
+            seq += Possibility(recognizedSymbol.symbol, offset, recognizedSymbol.confidence)
           }
 
           possibilitySequences += Sequence(seq)
@@ -115,21 +115,19 @@ class Solver(
       }
     }
 
-    var keys = resultMap.entries.sortedBy { it.value }.map { it.key }
-    val keysFitting = keys.filter { key -> key.length == 5 || key.length == 6 }
-    if (keysFitting.isNotEmpty()) {
-      keys = keysFitting
-    }
+    return resultMap.entries
+      .sortedByDescending { (_, confidence) -> confidence }
+      .map { (sequence, _) -> sequence }
+      .filter { sequence -> sequence.length == 5 || sequence.length == 6 }
+      .mapNotNull { sequence ->
+        val confidence = resultMap[sequence]
+          ?: return@mapNotNull null
 
-    return keys.mapNotNull { sequence ->
-      val confidence = resultMap[sequence]
-        ?: return@mapNotNull null
-
-      return@mapNotNull RecognizedSequence(
-        sequence = sequence,
-        confidence = confidence
-      )
-    }
+        return@mapNotNull RecognizedSequence(
+          sequence = sequence,
+          confidence = confidence
+        )
+      }
   }
 
   private fun solveInternal(
