@@ -5,11 +5,8 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.rememberScrollableState
-import androidx.compose.foundation.gestures.scrollable
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,8 +14,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
@@ -35,18 +32,21 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.ScaleFactor
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.withScale
+import androidx.core.graphics.withTranslation
 import com.github.k1rakishou.chan4captchasolver.data.CaptchaInfo
 import com.github.k1rakishou.chan4captchasolver.ui.compose.KurobaComposeSnappingSlider
 import com.github.k1rakishou.chan4captchasolver.ui.theme.Chan4CaptchaSolverTheme
@@ -334,20 +334,7 @@ class MainActivity : ComponentActivity() {
       if (size != IntSize.Zero) {
         if (captchaInfo != null) {
           if (captchaInfo.isNoopChallenge()) {
-            Box(
-              modifier = Modifier
-                .fillMaxWidth()
-                .height(128.dp)
-                .align(Alignment.Center)
-            ) {
-              // TODO(KurobaEx):
-//              Text(
-//                text = stringResource(id = R.string.chan4_captcha_layout_verification_not_required),
-//                textAlign = TextAlign.Center,
-//                modifier = Modifier
-//                  .fillMaxWidth()
-//              )
-            }
+            error("Not supported here")
           } else {
             BuildCaptchaImageNormal(captchaInfo, size)
           }
@@ -361,81 +348,42 @@ class MainActivity : ComponentActivity() {
     captchaInfo: CaptchaInfo,
     size: IntSize
   ) {
-    val imgBitmapPainter = requireNotNull(captchaInfo.fgBitmapPainter) { "fgBitmapPainter must not be null!" }
-    val scale = 4f
+    val density = LocalDensity.current
 
-    val contentScale = remember(key1 = scale) { Scale(scale) }
-    var scrollValue by captchaInfo.sliderValue
+    val width = captchaInfo.fgBitmapPainter!!.intrinsicSize.width.toInt()
+    val height = captchaInfo.fgBitmapPainter!!.intrinsicSize.height.toInt()
+    val th = 80
+    val pw = 16
+    val canvasScale = (th / height)
+    val canvasHeight = th
+    val canvasWidth = width * canvasScale + pw * 2
 
-    val offset = remember(key1 = scrollValue, key2 = scale) {
-      val xOffset = (captchaInfo.widthDiff() * scale) + ((scrollValue * 2) * captchaInfo.widthDiff() * scale * -1)
-      IntOffset(x = xOffset.toInt(), y = 0)
-    }
+    val scale = Math.min(size.width.toFloat() / width, size.height.toFloat() / height)
+    val canvasWidthDp = with(density) { (canvasWidth * scale).toDp() }
+    val canvasHeightDp = with(density) { (canvasHeight * scale).toDp() }
 
-    Column {
-      if (captchaInfo.bgBitmapPainter != null) {
-        val bgBitmapPainter = captchaInfo.bgBitmapPainter
+    val scrollValue by captchaInfo.sliderValue
 
-        Image(
-          modifier = Modifier
-            .wrapContentSize()
-            .offset { offset },
-          painter = bgBitmapPainter,
-          contentScale = contentScale,
-          contentDescription = null,
-        )
-      }
+    Canvas(
+      modifier = Modifier
+        .size(canvasWidthDp, canvasHeightDp)
+        .clipToBounds(),
+      onDraw = {
+        val canvas = drawContext.canvas.nativeCanvas
 
-      val scrollState = rememberScrollableState { delta ->
-        var newScrollValue = scrollValue + ((delta * 2f) / size.width.toFloat())
+        canvas.withScale(x = scale, y = scale) {
+          drawRect(Color(0xFFEEEEEE.toInt()))
 
-        if (newScrollValue < 0f) {
-          newScrollValue = 0f
-        } else if (newScrollValue > 1f) {
-          newScrollValue = 1f
+          if (captchaInfo.bgBitmap != null) {
+            canvas.withTranslation(x = (scrollValue * captchaInfo.widthDiff() * -1)) {
+              canvas.drawBitmap(captchaInfo.bgBitmap, 0f, 0f, null)
+            }
+          }
+
+          canvas.drawBitmap(captchaInfo.fgBitmap!!, 0f, 0f, null)
         }
-
-        scrollValue = newScrollValue
-
-        return@rememberScrollableState delta
       }
-
-      Spacer(modifier = Modifier.height(4.dp))
-
-      Image(
-        modifier = Modifier
-          .wrapContentSize()
-          .scrollable(state = scrollState, orientation = Orientation.Horizontal),
-        painter = imgBitmapPainter,
-        contentScale = contentScale,
-        contentDescription = null
-      )
-
-      Spacer(modifier = Modifier.height(4.dp))
-
-      Box {
-        if (captchaInfo.bgBitmapPainter != null) {
-          val bgBitmapPainter = captchaInfo.bgBitmapPainter
-
-          Image(
-            modifier = Modifier
-              .wrapContentSize()
-              .offset { offset },
-            painter = bgBitmapPainter,
-            contentScale = contentScale,
-            contentDescription = null,
-          )
-        }
-
-        Image(
-          modifier = Modifier
-            .wrapContentSize(),
-          painter = imgBitmapPainter,
-          contentScale = contentScale,
-          contentDescription = null
-        )
-      }
-    }
+    )
   }
 
   private fun loadCaptcha(): String {

@@ -48,29 +48,31 @@ object Helpers {
     val captchaInfoRawAdapter = moshi.adapter(CaptchaInfoRaw::class.java)
     val testCaptchaInfoRaw = captchaInfoRawAdapter.fromJson(captchaJson)!!
 
-    val (bgBitmapPainter, bgPixels) = testCaptchaInfoRaw.bg?.let { bgBase64Img ->
+    val (bgBitmapPainter, bgBitmap, bgPixels) = testCaptchaInfoRaw.bg?.let { bgBase64Img ->
       val bgByteArray = Base64.decode(bgBase64Img, Base64.DEFAULT)
       val bitmap = BitmapFactory.decodeByteArray(bgByteArray, 0, bgByteArray.size)
 
       val pixels = IntArray(bitmap.width * bitmap.height)
       bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
 
-      return@let BitmapPainter(bitmap.asImageBitmap()) to pixels
-    } ?: (null to null)
+      return@let Triple(BitmapPainter(bitmap.asImageBitmap()), bitmap, pixels)
+    } ?: Triple(null, null, null)
 
-    val (fgBitmapPainter, imgPixels) = testCaptchaInfoRaw.img?.let { imgBase64Img ->
+    val (fgBitmapPainter, fgBitmap, imgPixels) = testCaptchaInfoRaw.img?.let { imgBase64Img ->
       val imgByteArray = Base64.decode(imgBase64Img, Base64.DEFAULT)
       val bitmap = BitmapFactory.decodeByteArray(imgByteArray, 0, imgByteArray.size)
 
       val pixels = IntArray(bitmap.width * bitmap.height)
       bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
 
-      return@let BitmapPainter(bitmap.asImageBitmap()) to pixels
-    } ?: (null to null)
+      return@let Triple(BitmapPainter(bitmap.asImageBitmap()), bitmap, pixels)
+    } ?: Triple(null, null, null)
 
     return CaptchaInfo(
       bgBitmapPainter = bgBitmapPainter,
       fgBitmapPainter = fgBitmapPainter!!,
+      bgBitmap = bgBitmap,
+      fgBitmap = fgBitmap,
       bgPixelsArgb = bgPixels,
       fgPixelsArgb = imgPixels,
       challenge = testCaptchaInfoRaw.challenge!!,
@@ -121,7 +123,7 @@ object Helpers {
       0 downTo -(captchaInfo.widthDiff())
     }
 
-    for (offset in offsets) {
+    for (currentOffset in offsets) {
       coroutineScope.ensureActive()
       val canvas = Canvas(resultBitmap)
 
@@ -134,18 +136,16 @@ object Helpers {
       canvas.rotate(90f)
 
       if (bgPixelsArgb != null) {
-        // Draw the background image in the center of the canvas
-        canvas.withTranslation(x = halfBgWidthDiff) {
-          canvas.withTranslation(x = offset.toFloat()) {
-            val bgWidth = captchaInfo.bgWidth!!
+        // Draw the background image in the center of the canvas with "currentOffset" px horizontal translation
+        canvas.withTranslation(x = halfBgWidthDiff + currentOffset.toFloat()) {
+          val bgWidth = captchaInfo.bgWidth!!
 
-            kotlin.run {
-              val bitmap = Bitmap.createBitmap(bgWidth, height, Bitmap.Config.ARGB_8888)
-              bgBitmap = bitmap
+          kotlin.run {
+            val bitmap = Bitmap.createBitmap(bgWidth, height, Bitmap.Config.ARGB_8888)
+            bgBitmap = bitmap
 
-              bitmap.setPixels(bgPixelsArgb, 0, bgWidth, 0, 0, bgWidth - bgWidthDiff, height)
-              canvas.drawBitmap(bitmap, 0f, 0f, null)
-            }
+            bitmap.setPixels(bgPixelsArgb, 0, bgWidth, 0, 0, bgWidth, height)
+            canvas.drawBitmap(bitmap, 0f, 0f, null)
           }
         }
       }
@@ -185,13 +185,16 @@ object Helpers {
       if (disorder < bestDisorder) {
         bestDisorder = disorder
         bestImagePixels = resultPixels.clone()
-        bestOffset = offset
+        bestOffset = currentOffset
       }
     }
 
-    // Transform current offset into 0..1 range
-    val pixelsPerOffset = (resultBitmap.height / Math.abs(offsets.last).toFloat())
-    val adjustedScroll = (pixelsPerOffset * Math.abs(bestOffset)) / resultBitmap.height
+    val adjustedScroll = if (customOffset == null) {
+      // Transform current offset into 0..1 range
+      Math.abs(bestOffset).toFloat() / Math.abs(offsets.last).toFloat()
+    } else {
+      null
+    }
 
     Log.d(TAG, "combineBgWithFgWithBestDisorder() " +
       "adjustedScroll=${adjustedScroll}, " +

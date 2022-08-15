@@ -1,5 +1,6 @@
 package com.github.k1rakishou.chan4captchasolver.data
 
+import android.graphics.Bitmap
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import com.github.k1rakishou.chan4captchasolver.data.CaptchaInfoRaw.Companion.NOOP_CHALLENGE
@@ -9,6 +10,8 @@ import kotlin.math.abs
 class CaptchaInfo(
   val bgBitmapPainter: BitmapPainter?,
   val fgBitmapPainter: BitmapPainter?,
+  val bgBitmap: Bitmap?,
+  val fgBitmap: Bitmap?,
   val bgPixelsArgb: IntArray?,
   val fgPixelsArgb: IntArray?,
   val challenge: String,
