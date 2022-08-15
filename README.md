@@ -7,3 +7,4 @@ The model is taken from https://github.com/AUTOMATIC1111/4chan-captcha-solver an
 - Download an APK for your CPU architecture (most likely arm64-v8a or armeabi-v7a).
 - Install, restart KurobaEx.
 - Upon next captcha load it should be solved automatically.
+- If it says that there is a version mismatch then make sure KurobaEx and this app are both updated to the latest version.
