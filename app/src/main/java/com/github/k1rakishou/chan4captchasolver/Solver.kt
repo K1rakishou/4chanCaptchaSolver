@@ -10,8 +10,6 @@ import kotlin.time.ExperimentalTime
 import kotlin.time.measureTimedValue
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
-import org.tensorflow.lite.gpu.CompatibilityList
-import org.tensorflow.lite.gpu.GpuDelegate
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
 
 class Solver(
@@ -23,24 +21,17 @@ class Solver(
 
   @OptIn(ExperimentalTime::class)
   fun solve(height: Int, pixels: IntArray): List<RecognizedSequence> {
-    val gpuDelegate = createGpuDelegate()
+    val (results, duration) = measureTimedValue {
+      val recognizedSymbolsList = solveInternal(
+        height = height,
+        pixels = pixels
+      )
 
-    try {
-      val (results, duration) = measureTimedValue {
-        val recognizedSymbolsList = solveInternal(
-          gpuDelegate = gpuDelegate,
-          height = height,
-          pixels = pixels
-        )
-
-        return@measureTimedValue postProcess(recognizedSymbolsList)
-      }
-
-      Log.d(TAG, "solve() took ${duration}, results: ${results}")
-      return results
-    } finally {
-      gpuDelegate?.close()
+      return@measureTimedValue postProcess(recognizedSymbolsList)
     }
+
+    Log.d(TAG, "solve() took ${duration}, results: ${results}")
+    return results
   }
 
   private fun postProcess(recognizedSymbolsList: List<List<RecognizedSymbol>>): List<RecognizedSequence> {
@@ -131,7 +122,6 @@ class Solver(
   }
 
   private fun solveInternal(
-    gpuDelegate: GpuDelegate?,
     height: Int,
     pixels: IntArray
   ): List<List<RecognizedSymbol>> {
@@ -139,13 +129,8 @@ class Solver(
     val byteBuffer = convertBitmapToByteBuffer(pixels, shape)
 
     val options = Interpreter.Options().apply {
-      if (gpuDelegate != null) {
-        Log.d(TAG, "solve() using gpu delegate")
-        addDelegate(gpuDelegate)
-      } else {
-        Log.d(TAG, "solve() using cpu with ${threadsCount} threads")
-        numThreads = threadsCount
-      }
+      Log.d(TAG, "solve() using cpu with ${threadsCount} threads")
+      numThreads = threadsCount
     }
 
     return Interpreter(modelFile, options).use { interpreter ->
@@ -195,18 +180,6 @@ class Solver(
     val confidence: Float
   )
 
-  private fun createGpuDelegate(): GpuDelegate? {
-    val compatList = CompatibilityList()
-
-    compatList.use { list ->
-      if (!list.isDelegateSupportedOnThisDevice) {
-        return null
-      }
-
-      return GpuDelegate(list.bestOptionsForThisDevice)
-    }
-  }
-
   private fun convertBitmapToByteBuffer(pixels: IntArray, shape: IntArray): ByteBuffer {
     val tensorBuffer = TensorBuffer.createFixedSize(shape, DataType.FLOAT32)
     val floatArray = FloatArray(pixels.size)
@@ -214,7 +187,7 @@ class Solver(
     for (index in pixels.indices) {
       val pixelValue = pixels[index]
 
-      // pixelValue is in ARGB format and we need to extract R
+      // pixelValue is in ARGB format and we need to extract R and convert it into 0f..1f range
       val r = ((pixelValue.toUInt() shr 16) and 0xffu).toFloat()
       val convertedPixelValue = (r * (-1f / 238f)) + 1f
 

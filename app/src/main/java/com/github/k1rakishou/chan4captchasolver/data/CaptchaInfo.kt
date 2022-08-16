@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import com.github.k1rakishou.chan4captchasolver.data.CaptchaInfoRaw.Companion.NOOP_CHALLENGE
-import kotlin.math.abs
 
 
 class CaptchaInfo(
@@ -28,7 +27,11 @@ class CaptchaInfo(
       return 0
     }
 
-    return abs(imgWidth - bgWidth)
+//    return abs(imgWidth - bgWidth)
+
+    // Hardcode it as 50 because that's how it is in the script and using "imgWidth - bgWidth"
+    // (which is always 49) causes the NN model to fail.
+    return 50
   }
 
   fun reset() {
