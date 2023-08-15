@@ -15,187 +15,90 @@ import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
 class Solver(
   private val context: Context
 ) {
-  private val charset = arrayOf("", "0", "2", "4", "8", "A", "D", "G", "H", "J", "K", "M", "N", "P", "Q", "R", "S", "T", "V", "W", "X", "Y")
+  private val charset = arrayOf(' ', '0', '2', '4', '8', 'A', 'D', 'G', 'H', 'J', 'K', 'M', 'N', 'P', 'R', 'S', 'T', 'V', 'W', 'X', 'Y')
   private val modelFile by lazy { loadModelFile() }
   private val threadsCount = Runtime.getRuntime().availableProcessors().coerceAtLeast(2)
 
   @OptIn(ExperimentalTime::class)
-  fun solve(height: Int, pixels: IntArray): List<RecognizedSequence> {
-    val (results, duration) = measureTimedValue {
-      val recognizedSymbolsList = solveInternal(
-        height = height,
+  fun solve(width: Int, pixels: IntArray): String {
+    val (result, duration) = measureTimedValue {
+      return@measureTimedValue solveInternal(
+        width = width,
         pixels = pixels
       )
-
-      return@measureTimedValue postProcess(recognizedSymbolsList)
     }
 
-    Log.d(TAG, "solve() took ${duration}, results: ${results}")
-    return results
-  }
-
-  private fun postProcess(recognizedSymbolsList: List<List<RecognizedSymbol>>): List<RecognizedSequence> {
-    data class Possibility(
-      val symbol: String,
-      val offset: Int,
-      val confidence: Float
-    )
-
-    data class Sequence(
-      val seq: List<Possibility>
-    )
-
-    val possibilitySequences = mutableListOf<Sequence>()
-    possibilitySequences += Sequence(emptyList())
-
-    recognizedSymbolsList.forEachIndexed { offset, recognizedSymbols ->
-      if (recognizedSymbols.isEmpty()) {
-        return@forEachIndexed
-      }
-
-      if (recognizedSymbols.size == 1 && recognizedSymbols[0].symbol == "") {
-        return@forEachIndexed
-      }
-
-      val oldPossibilities = possibilitySequences.toMutableList()
-      possibilitySequences.clear()
-
-      oldPossibilities.forEach { possibility ->
-        recognizedSymbols.forEach { recognizedSymbol ->
-          val seq = possibility.seq.toMutableList()
-          if (recognizedSymbol.symbol != "") {
-            seq += Possibility(recognizedSymbol.symbol, offset, recognizedSymbol.confidence)
-          }
-
-          possibilitySequences += Sequence(seq)
-        }
-      }
-    }
-
-    val resultMap = mutableMapOf<String, Float>()
-
-    possibilitySequences.forEach { sequence ->
-      var line = ""
-      var lastSym: String? = null
-      var lastOff = -1
-      var count = 0
-      var prob = 0f
-
-      sequence.seq.forEach { possibility ->
-        val symbol = possibility.symbol
-        val offset = possibility.offset
-        val confidence = possibility.confidence
-
-        if (symbol == lastSym && lastOff + 2 >= offset) {
-          return@forEach
-        }
-
-        line += symbol
-        lastSym = symbol
-        lastOff = offset
-        prob += confidence
-        count++
-      }
-
-      if(count > 0) {
-        prob /= count
-      }
-
-      if(prob > (resultMap[line] ?: -1f) || !resultMap.containsKey(line)) {
-        resultMap[line] = prob
-      }
-    }
-
-    return resultMap.entries
-      .sortedByDescending { (_, confidence) -> confidence }
-      .map { (sequence, _) -> sequence }
-      .filter { sequence -> sequence.length == 5 || sequence.length == 6 }
-      .mapNotNull { sequence ->
-        val confidence = resultMap[sequence]
-          ?: return@mapNotNull null
-
-        return@mapNotNull RecognizedSequence(
-          sequence = sequence,
-          confidence = confidence
-        )
-      }
+    Log.d(TAG, "solve() took ${duration}, result: '${result}'")
+    return result
   }
 
   private fun solveInternal(
-    height: Int,
+    width: Int,
+    height: Int = 80,
     pixels: IntArray
-  ): List<List<RecognizedSymbol>> {
-    val shape = intArrayOf(1, height, 80, 1)
-    val byteBuffer = convertBitmapToByteBuffer(pixels, shape)
-
+  ): String {
     val options = Interpreter.Options().apply {
       Log.d(TAG, "solve() using cpu with ${threadsCount} threads")
       numThreads = threadsCount
     }
 
-    return Interpreter(modelFile, options).use { interpreter ->
-      val inputIndex = 0
-      val outputIndex = 0
+    val groups = pixels.groupBy { it }
+    for ((pixel, grouped) in groups) {
+      println("${pixel}: ${grouped.size}")
+    }
 
-      interpreter.resizeInput(inputIndex, shape)
-      interpreter.run(byteBuffer, null)
+    return Interpreter(modelFile, options).use { model ->
+      val mono = convertBitmapToByteBuffer(pixels, width, height)
+      model.run(mono, null)
 
-      val tensor = interpreter.getOutputTensor(outputIndex)
-      val buffer = tensor.asReadOnlyBuffer()
+      val tensor = model.getOutputTensor(0)
+      val outputBuffer = tensor.asReadOnlyBuffer()
+
+      // tensor.shape() is [1, 75, 23] here
       val count = tensor.shape().reduce { acc, i -> acc * i }
 
-      return@use (0 until count)
-        .map { index -> buffer.getFloat(index * 4) }
-        // Process results in chunks of size "charset.size" because that's how they are grouped together
-        .chunked(charset.size)
-        .mapNotNull { probabilities ->
-          val recognizedSymbols = mutableListOf<RecognizedSymbol>()
-          val max = probabilities.maxBy { it }
+      val outputFloatArray = FloatArray(count) { 0f }
 
-          probabilities.forEachIndexed { charIndex, probability ->
-            val prob = probability / max
+      (0 until count)
+        .forEach { index -> outputFloatArray[index] = outputBuffer.getFloat(index * 4) }
 
-            if (prob > 0.05) {
-              val symbol = charset.getOrNull(charIndex + 1) ?: ""
-              recognizedSymbols += RecognizedSymbol(symbol, prob)
-            }
-          }
+      val prediction = outputFloatArray.argmax(tensor.shape())
+      val processedSequence = processCTCDecodedSequence(prediction, charset.size + 1)
+      val result = indicesToSymbols(processedSequence.toIntArray())
 
-          if (recognizedSymbols.isEmpty()) {
-            return@mapNotNull null
-          }
+      // For the current hardcoded captcha (JXAPXW) this will give 'YY' prediction.
+      Log.d(TAG, "solve() result: ${result}")
 
-          return@mapNotNull recognizedSymbols
-        }
+      return@use result
     }
   }
 
-  data class RecognizedSequence(
-    val sequence: String,
-    val confidence: Float
-  )
+  private fun processCTCDecodedSequence(decodedSequence: IntArray, blankLabel: Int = 0): ArrayList<Int> {
+    val result = ArrayList<Int>()
+    var prevLabel = blankLabel
 
-  data class RecognizedSymbol(
-    val symbol: String,
-    val confidence: Float
-  )
-
-  private fun convertBitmapToByteBuffer(pixels: IntArray, shape: IntArray): ByteBuffer {
-    val tensorBuffer = TensorBuffer.createFixedSize(shape, DataType.FLOAT32)
-    val floatArray = FloatArray(pixels.size)
-
-    for (index in pixels.indices) {
-      val pixelValue = pixels[index]
-
-      // pixelValue is in ARGB format and we need to extract R and convert it into 0f..1f range
-      val r = ((pixelValue.toUInt() shr 16) and 0xffu).toFloat()
-      val convertedPixelValue = (r * (-1f / 238f)) + 1f
-
-      floatArray[index] = convertedPixelValue.coerceIn(0f, 1f)
+    for (label in decodedSequence) {
+      if (label != blankLabel && label != prevLabel) {
+        result.add(label)
+      }
+      prevLabel = label
     }
 
-    tensorBuffer.loadArray(floatArray, shape)
-    return tensorBuffer.buffer
+    return result
+  }
+
+  private fun indicesToSymbols(decodedIndices: IntArray): String {
+    return decodedIndices.map { index -> charset.getOrNull(index - 1) ?: "" }.joinToString("").trim()
+  }
+
+  private fun FloatArray.argmax(shape: IntArray): IntArray {
+    // chunkSize is 23 here
+    val chunkSize = shape.last()
+
+    return this.toList()
+      .chunked(chunkSize)
+      .map { chunk -> chunk.indexOf(chunk.max()) }
+      .toIntArray()
   }
 
   private fun loadModelFile(): MappedByteBuffer {
@@ -206,6 +109,49 @@ class Solver(
     val declaredLength = fileDescriptor.declaredLength
 
     return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
+  }
+
+  private fun convertBitmapToByteBuffer(pixels: IntArray, width: Int, height: Int): ByteBuffer {
+    // inputShape1 is [80, 300, 1] here
+    val inputShape1 = intArrayOf(height, width, 1)
+
+    val tensorBuffer = TensorBuffer.createFixedSize(inputShape1, DataType.FLOAT32)
+    val floatArray = FloatArray(pixels.size)
+
+    // This loop converts an array of ARGB pixels into 0..1 floats by taking R value out of ARGB and dividing it by 255f
+    for (index in pixels.indices) {
+      val argb = pixels[index]
+
+      val r = ((argb.toUInt() shr 16) and 0xffu).toFloat()
+      val convertedPixelValue = r / 255.0f
+
+      floatArray[index] = convertedPixelValue.coerceIn(0f, 1f)
+    }
+
+    // inputShape2 is [1, 300, 80, 1] here
+    val inputShape2 = intArrayOf(1, width, height, 1)
+    val outArray = reshape(floatArray, inputShape2)
+
+    tensorBuffer.loadArray(outArray)
+    return tensorBuffer.buffer
+  }
+
+  private fun reshape(input: FloatArray, shape: IntArray): FloatArray {
+    val output = FloatArray(shape.reduce { acc, i -> acc * i })
+    var inputIdx = 0
+
+    for (i in 0 until shape[0]) {
+      for (j in 0 until shape[1]) {
+        for (k in 0 until shape[2]) {
+          for (l in 0 until shape[3]) {
+            val outputIdx = i * shape[1] * shape[2] * shape[3] + j * shape[2] * shape[3] + k * shape[3] + l
+            output[outputIdx] = input[inputIdx++]
+          }
+        }
+      }
+    }
+
+    return output
   }
 
   companion object {

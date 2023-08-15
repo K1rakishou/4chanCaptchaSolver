@@ -8,11 +8,11 @@ import com.github.k1rakishou.chan4captchasolver.data.CaptchaInfoRaw.Companion.NO
 
 class CaptchaInfo(
   val bgBitmapPainter: BitmapPainter?,
-  val fgBitmapPainter: BitmapPainter?,
+  val imgBitmapPainter: BitmapPainter?,
   val bgBitmap: Bitmap?,
-  val fgBitmap: Bitmap?,
+  val imgBitmap: Bitmap?,
   val bgPixelsArgb: IntArray?,
-  val fgPixelsArgb: IntArray?,
+  val imgPixelsArgb: IntArray?,
   val challenge: String,
   val startedAt: Long,
   val ttlSeconds: Int,

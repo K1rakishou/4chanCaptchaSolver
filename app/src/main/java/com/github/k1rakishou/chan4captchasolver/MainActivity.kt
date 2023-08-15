@@ -120,13 +120,13 @@ class MainActivity : ComponentActivity() {
         captchaInfo = captchaInfo,
         scrollValue = scroll,
         onStarted = { solving = true },
-        onFinished = { newSliderValue, results, resultBitmapPainter ->
+        onFinished = { newSliderValue, result, resultBitmapPainter ->
           if (newSliderValue != null) {
-            scrollValue = newSliderValue
+            scrollValue = newSliderValue / SLIDE_STEPS.toFloat()
           }
 
-          if (results.isNotEmpty()) {
-            currentInputValue = results.first().sequence
+          if (result.isNotEmpty()) {
+            currentInputValue = result
           }
 
           bitmapPainterMut = resultBitmapPainter
@@ -249,10 +249,10 @@ class MainActivity : ComponentActivity() {
               customOffset = null
             )
 
-            val height = resultImageData.height
-            val results = solver.solve(height, resultImageData.bestImagePixels)
+            val width = resultImageData.width
+            val result = solver.solve(width, resultImageData.bestImagePixels)
 
-            if (results.first().sequence.equals(other = captchaAnswer, ignoreCase = true)) {
+            if (result.equals(other = captchaAnswer, ignoreCase = true)) {
               correct++
             } else {
               incorrect++
@@ -280,7 +280,7 @@ class MainActivity : ComponentActivity() {
     captchaInfo: CaptchaInfo,
     scrollValue: Float?,
     onStarted: () -> Unit,
-    onFinished: (newSliderValue: Float?, results: List<Solver.RecognizedSequence>, resultBitmapPainter: BitmapPainter) -> Unit
+    onFinished: (newSliderValue: Float?, result: String, resultBitmapPainter: BitmapPainter) -> Unit
   ) {
     withContext(Dispatchers.IO) {
       withContext(Dispatchers.Main) {
@@ -300,7 +300,7 @@ class MainActivity : ComponentActivity() {
 
       val width = resultImageData.width
       val height = resultImageData.height
-      val adjustedScroll = resultImageData.adjustedScroll
+      val adjustedScroll = resultImageData.offset
 
       val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
       bitmap.setPixels(resultImageData.bestImagePixels, 0, width, 0, 0, width, height)
@@ -312,10 +312,10 @@ class MainActivity : ComponentActivity() {
       }
 
       val bitmapPainter = BitmapPainter(bitmap.asImageBitmap())
-      val results = solver.solve(height, resultImageData.bestImagePixels)
+      val result = solver.solve(width, resultImageData.bestImagePixels)
 
       withContext(Dispatchers.Main) {
-        onFinished(adjustedScrollValue, results, bitmapPainter)
+        onFinished(adjustedScrollValue, result, bitmapPainter)
       }
     }
   }
@@ -350,8 +350,8 @@ class MainActivity : ComponentActivity() {
   ) {
     val density = LocalDensity.current
 
-    val width = captchaInfo.fgBitmapPainter!!.intrinsicSize.width.toInt()
-    val height = captchaInfo.fgBitmapPainter!!.intrinsicSize.height.toInt()
+    val width = captchaInfo.imgBitmapPainter!!.intrinsicSize.width.toInt()
+    val height = captchaInfo.imgBitmapPainter!!.intrinsicSize.height.toInt()
     val th = 80
     val pw = 16
     val canvasScale = (th / height)
@@ -380,7 +380,7 @@ class MainActivity : ComponentActivity() {
             }
           }
 
-          canvas.drawBitmap(captchaInfo.fgBitmap!!, 0f, 0f, null)
+          canvas.drawBitmap(captchaInfo.imgBitmap!!, 0f, 0f, null)
         }
       }
     )

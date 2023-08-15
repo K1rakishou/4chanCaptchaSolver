@@ -106,8 +106,8 @@ class SolverBoardcastReceiver : BroadcastReceiver() {
       customOffset = offset
     )
 
-    val height = resultImageData.height
-    val adjustedScroll = resultImageData.adjustedScroll
+    val width = resultImageData.width
+    val adjustedScroll = resultImageData.offset
 
     val adjustedScrollValue = if (scrollValue == null && adjustedScroll != null) {
       adjustedScroll
@@ -115,10 +115,9 @@ class SolverBoardcastReceiver : BroadcastReceiver() {
       null
     }
 
-    val solutions = solver.solve(height, resultImageData.bestImagePixels)
-      .map { recognizedSequence -> recognizedSequence.sequence }
+    val solution = solver.solve(width, resultImageData.bestImagePixels)
 
-    val captchaSolution = CaptchaSolution(solutions, adjustedScrollValue)
+    val captchaSolution = CaptchaSolution(listOf(solution), adjustedScrollValue)
     return moshi.adapter(CaptchaSolution::class.java)
       .toJson(captchaSolution)
   }

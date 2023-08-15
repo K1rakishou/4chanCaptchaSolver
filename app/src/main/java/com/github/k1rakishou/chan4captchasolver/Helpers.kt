@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Rect
 import android.util.Base64
 import android.util.Log
 import androidx.compose.ui.graphics.asImageBitmap
@@ -12,14 +13,10 @@ import androidx.core.graphics.withTranslation
 import com.github.k1rakishou.chan4captchasolver.data.CaptchaInfo
 import com.github.k1rakishou.chan4captchasolver.data.CaptchaInfoRaw
 import com.squareup.moshi.Moshi
-import java.util.LinkedList
 import kotlin.time.ExperimentalTime
 import kotlin.time.measureTimedValue
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.ensureActive
 
-@OptIn(ExperimentalUnsignedTypes::class)
 object Helpers {
   private const val TAG = "Helpers"
   private val captchaBgColor = 0xFFEEEEEE.toInt()
@@ -32,7 +29,6 @@ object Helpers {
     val (resultImageData, duration) = measureTimedValue {
       coroutineScope {
         combineBgWithFgWithBestDisorderInternal(
-          coroutineScope = this,
           captchaInfo = captchaInfo,
           customOffset = customOffset
         )
@@ -70,11 +66,11 @@ object Helpers {
 
     return CaptchaInfo(
       bgBitmapPainter = bgBitmapPainter,
-      fgBitmapPainter = fgBitmapPainter!!,
+      imgBitmapPainter = fgBitmapPainter!!,
       bgBitmap = bgBitmap,
-      fgBitmap = fgBitmap,
+      imgBitmap = fgBitmap,
       bgPixelsArgb = bgPixels,
-      fgPixelsArgb = imgPixels,
+      imgPixelsArgb = imgPixels,
       challenge = testCaptchaInfoRaw.challenge!!,
       startedAt = System.currentTimeMillis(),
       ttlSeconds = testCaptchaInfoRaw.ttl!!,
@@ -83,9 +79,38 @@ object Helpers {
     )
   }
 
-  private fun combineBgWithFgWithBestDisorderInternal(
-    coroutineScope: CoroutineScope,
+  private suspend fun combineBgWithFgWithBestDisorderInternal(
     captchaInfo: CaptchaInfo,
+    customOffset: Float?
+  ): ResultImageData {
+    val bgPixelsArgb = captchaInfo.bgPixelsArgb
+    val imgPixelsArgb = captchaInfo.imgPixelsArgb!!
+
+    val imgSize = captchaInfo.imgBitmapPainter!!.intrinsicSize
+    val bgSize = captchaInfo.bgBitmapPainter!!.intrinsicSize
+
+    return imageFromCanvas(
+      imgBitmap = captchaInfo.imgBitmap!!,
+      bgBitmap = captchaInfo.bgBitmap,
+      img = imgPixelsArgb,
+      bg = bgPixelsArgb,
+      imgWidth = imgSize.width.toInt(),
+      imgHeight = imgSize.height.toInt(),
+      bgWidth = bgSize.width.toInt(),
+      bgHeight = bgSize.height.toInt(),
+      customOffset = customOffset
+    )
+  }
+
+  private suspend fun imageFromCanvas(
+    imgBitmap: Bitmap,
+    bgBitmap: Bitmap?,
+    img: IntArray,
+    bg: IntArray?,
+    imgWidth: Int,
+    imgHeight: Int,
+    bgWidth: Int = 0,
+    bgHeight: Int = 0,
     customOffset: Float?
   ): ResultImageData {
     val paint = Paint().apply {
@@ -94,203 +119,168 @@ object Helpers {
       style = Paint.Style.FILL
     }
 
-    val bgPixelsArgb = captchaInfo.bgPixelsArgb
-    val fgPixelsArgb = captchaInfo.fgPixelsArgb!!
-
-    var bestDisorder = 999f
-    var bestImagePixels: IntArray? = null
-    var bestOffset = customOffset?.toInt() ?: -1
-
-    val width = captchaInfo.fgBitmapPainter!!.intrinsicSize.width.toInt()
-    val height = captchaInfo.fgBitmapPainter!!.intrinsicSize.height.toInt()
+    val width = imgWidth
+    val height = imgHeight
     val th = 80
     val pw = 16
     val scale = th / height
-    val canvasHeight = width * scale + pw * 2
-    val canvasWidth = th
 
-    val bgWidthDiff = canvasHeight - width
-    val halfBgWidthDiff = bgWidthDiff / 2f
+    val cw = width * scale + pw * 2;
 
-    val resultBitmap = Bitmap.createBitmap(canvasWidth, canvasHeight, Bitmap.Config.ARGB_8888)
-    var bgBitmap: Bitmap? = null
+    val canvasHeight = th
+    val canvasWidth = if (cw >= 300) 300 else cw
+
+    val bitmap = Bitmap.createBitmap(canvasWidth, canvasHeight, Bitmap.Config.ARGB_8888)
     val fgBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-    val resultPixels = IntArray(resultBitmap.width * resultBitmap.height)
 
-    val offsets = if (customOffset != null) {
-      IntProgression.fromClosedRange(-customOffset.toInt(), -customOffset.toInt(), 1)
-    } else {
-      0 downTo -(captchaInfo.widthDiff())
+    var offset: Float? = customOffset
+
+    if (customOffset == null && bgBitmap != null) {
+      offset = slideCaptcha(
+        imgBitmap,
+        bgBitmap
+      )
     }
 
-    for (currentOffset in offsets) {
-      coroutineScope.ensureActive()
-      val canvas = Canvas(resultBitmap)
-
-      // Fill the whole canvas with the captcha bg color (0xFFEEEEEE)
-      canvas.drawRect(0f, 0f, canvas.width.toFloat(), canvas.height.toFloat(), paint)
-
-      // Flip the image horizontally and then rotate it. I don't understand why we need to do this
-      // either. Probably the model was trained this way.
-      canvas.scale(-scale.toFloat(), scale.toFloat())
-      canvas.rotate(90f)
-
-      if (bgPixelsArgb != null) {
-        // Draw the background image in the center of the canvas with "currentOffset" px horizontal translation
-        canvas.withTranslation(x = halfBgWidthDiff + currentOffset.toFloat()) {
-          val bgWidth = captchaInfo.bgWidth!!
-
-          kotlin.run {
-            val bitmap = Bitmap.createBitmap(bgWidth, height, Bitmap.Config.ARGB_8888)
-            bgBitmap = bitmap
-
-            bitmap.setPixels(bgPixelsArgb, 0, bgWidth, 0, 0, bgWidth, height)
-            canvas.drawBitmap(bitmap, 0f, 0f, null)
-          }
-        }
-      }
-
-      // Draw the foreground image in the center of the canvas
-      canvas.withTranslation(x = halfBgWidthDiff) {
-        kotlin.run {
-          fgBitmap.setPixels(fgPixelsArgb, 0, width, 0, 0, width, height)
-          canvas.drawBitmap(fgBitmap, 0f, 0f, null)
-        }
-      }
-
-      kotlin.run {
-        // Fill the leftmost part of the captcha image with the captcha bg color (0xFFEEEEEE).
-        // This will remove all the noise which helps with character recognition
-        canvas.drawRect(
-          0f,
-          0f,
-          halfBgWidthDiff,
-          resultBitmap.width.toFloat(),
-          paint
-        )
-
-        // The same but for the rightmost part of the captcha image
-        canvas.drawRect(
-          resultBitmap.height.toFloat() - halfBgWidthDiff,
-          0f,
-          resultBitmap.height.toFloat(),
-          resultBitmap.width.toFloat(),
-          paint
-        )
-      }
-
-      resultBitmap.getPixels(resultPixels, 0, resultBitmap.width, 0, 0, resultBitmap.width, resultBitmap.height)
-      val disorder = calculateDisorder(resultPixels, resultBitmap.width, resultBitmap.height)
-
-      if (disorder < bestDisorder) {
-        bestDisorder = disorder
-        bestImagePixels = resultPixels.clone()
-        bestOffset = currentOffset
-      }
-    }
-
-    val adjustedScroll = if (customOffset == null) {
-      // Transform current offset into 0..1 range
-      Math.abs(bestOffset).toFloat() / Math.abs(offsets.last).toFloat()
-    } else {
-      null
-    }
-
-    Log.d(TAG, "combineBgWithFgWithBestDisorder() " +
-      "adjustedScroll=${adjustedScroll}, " +
-      "bestOffset=${bestOffset}, " +
-      "bestDisorder=${bestDisorder}")
-
-    val resultImageData = ResultImageData(
-      adjustedScroll = adjustedScroll,
-      width = resultBitmap.width,
-      height = resultBitmap.height,
-      bestImagePixels = bestImagePixels!!
+    val canvas = Canvas(bitmap)
+    canvas.drawImage(
+      offset = offset ?: 0f,
+      bg = bg,
+      img = img,
+      bgWidth = bgWidth,
+      width = width,
+      height = height,
+      paint = paint,
+      fgBitmap = fgBitmap
     )
 
-    resultBitmap.recycle()
+    val fBitmap = Bitmap.createBitmap(300, 80, Bitmap.Config.ARGB_8888)
+    val fcanvas = Canvas(fBitmap)
+
+    val src = Rect(0, 0, bitmap.width, bitmap.height)
+    val dst = Rect(0, 0, fBitmap.width, fBitmap.height)
+    fcanvas.drawBitmap(bitmap, src, dst, paint)
+
+    val resultPixels = IntArray(fBitmap.width * fBitmap.height)
+    fBitmap.getPixels(resultPixels, 0, fBitmap.width, 0, 0, fBitmap.width, fBitmap.height)
+
+    val resultImageData = ResultImageData(
+      offset = offset,
+      width = fBitmap.width,
+      height = fBitmap.height,
+      bestImagePixels = resultPixels
+    )
+
+    bitmap.recycle()
+    fBitmap.recycle()
     fgBitmap.recycle()
-    bgBitmap?.recycle()
 
     return resultImageData
   }
 
+  private fun Canvas.drawImage(
+    offset: Float,
+    bg: IntArray?,
+    img: IntArray,
+    bgWidth: Int,
+    width: Int,
+    height: Int,
+    paint: Paint,
+    fgBitmap: Bitmap
+  ) {
+    // Fill the whole canvas with the captcha bg color (0xFFEEEEEE)
+    this.drawRect(0f, 0f, this.width.toFloat(), this.height.toFloat(), paint)
+
+    if (bg != null) {
+      // Draw the background image in the center of the canvas with "currentOffset" px horizontal translation
+      this.withTranslation(x = -offset) {
+        kotlin.run {
+          val bitmap = Bitmap.createBitmap(bgWidth, height, Bitmap.Config.ARGB_8888)
+
+          bitmap.setPixels(bg, 0, bgWidth, 0, 0, bgWidth, height)
+          this.drawBitmap(bitmap, 0f, 0f, null)
+        }
+      }
+    }
+
+    // Draw the foreground image in the center of the canvas
+    kotlin.run {
+      fgBitmap.setPixels(img, 0, width, 0, 0, width, height)
+      this.drawBitmap(fgBitmap, 0f, 0f, null)
+    }
+  }
+
+  fun pxlBlackOrWhite(r: Int, g: Int, b: Int): Int {
+    return if (r + g + b > 384) 0 else 1
+  }
+
+  fun getBoundaries(img: Bitmap): List<IntArray> {
+    val width = img.width
+    val height = img.height
+    val chkArray = mutableListOf<IntArray>()
+
+    var opq = true
+    for (y in 0 until height) {
+      for (x in 0 until width) {
+        val pixel = img.getPixel(x, y)
+        val alpha = (pixel shr 24) and 0xff
+        val red = (pixel shr 16) and 0xff
+        val green = (pixel shr 8) and 0xff
+        val blue = pixel and 0xff
+
+        val a = alpha > 128
+        if (a != opq) {
+          val clr = pxlBlackOrWhite(red, green, blue)
+          chkArray.add(intArrayOf(x, y, clr))
+          opq = a
+        }
+      }
+    }
+    return chkArray
+  }
+
+  fun getBestPos(bg: Bitmap, chkArray: List<IntArray>, slideWidth: Int): Float {
+    val width = bg.width
+    var bestSimilarity = 0
+    var bestPos = 0
+
+    for (s in 0..slideWidth) {
+      var similarity = 0
+      for (chk in chkArray) {
+        val x = chk[0] + s
+        val y = chk[1]
+        val clr = chk[2]
+
+        val pixel = bg.getPixel(x, y)
+        val red = (pixel shr 16) and 0xff
+        val green = (pixel shr 8) and 0xff
+        val blue = pixel and 0xff
+
+        val bgClr = pxlBlackOrWhite(red, green, blue)
+        if (bgClr == clr) {
+          similarity++
+        }
+      }
+      if (similarity > bestSimilarity) {
+        bestSimilarity = similarity
+        bestPos = s
+      }
+    }
+    return (bestPos.toFloat() / slideWidth) * 100f
+  }
+
+  fun slideCaptcha(imgBitmap: Bitmap, bgBitmap: Bitmap): Float {
+    val chkArray = getBoundaries(imgBitmap)
+    val slideWidth = bgBitmap.width - imgBitmap.width
+    val sliderPos = getBestPos(bgBitmap, chkArray, slideWidth)
+    return sliderPos / 2
+  }
+
   class ResultImageData(
-    val adjustedScroll: Float?,
+    val offset: Float?,
     val width: Int,
     val height: Int,
     val bestImagePixels: IntArray
   )
-
-  private fun calculateDisorder(imagePixelsInput: IntArray, width: Int, height: Int): Float {
-    val totalCount = width * height
-    val pic = Array<Byte>(totalCount) { 0 }
-    val visited = Array<Int>(totalCount) { 0 }
-    val imagePixels = imagePixelsInput.toUIntArray()
-
-    for (idx in 0 until totalCount) {
-      if (visited[idx] > 0) {
-        continue
-      }
-
-      if (!black(imagePixels[idx])) {
-        continue
-      }
-
-      var blackCount = 0
-      val items = mutableListOf<Int>()
-      val toVisit = LinkedList<Int>()
-      toVisit.push(idx)
-
-      while (toVisit.isNotEmpty()) {
-        val cc = toVisit.pop()
-
-        if (visited[cc] > 0) {
-          continue
-        }
-        visited[cc] = 1
-
-        if (black(imagePixels[cc])) {
-          items += cc
-          blackCount++
-
-          toVisit.push(cc + 1)
-          toVisit.push(cc - 1)
-          toVisit.push(cc + width)
-          toVisit.push(cc - width)
-        }
-      }
-
-      if (blackCount >= 24) {
-        items.forEach { x -> pic[x] = 1 }
-      }
-    }
-
-    var res = 0
-    var total = 0
-
-    for (idx in 0 until (width * height - width)) {
-      if (pic[idx] != pic[idx + width]) {
-        res += 1
-      }
-
-      if (pic[idx] > 0) {
-        total += 1
-      }
-    }
-
-    if (total == 0) {
-      total = 1
-    }
-
-    return res.toFloat() / total.toFloat()
-  }
-
-  private fun black(x: UInt): Boolean {
-    // Get the R channel of ARGB
-    val r = ((x shr 16) and 0xFFu)
-
-    return r < 64u
-  }
 
 }
