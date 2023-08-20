@@ -34,17 +34,12 @@ class Solver(
 
   private fun solveInternal(
     width: Int,
-    height: Int = 80,
+    height: Int = 300,
     pixels: IntArray
   ): String {
     val options = Interpreter.Options().apply {
       Log.d(TAG, "solve() using cpu with ${threadsCount} threads")
       numThreads = threadsCount
-    }
-
-    val groups = pixels.groupBy { it }
-    for ((pixel, grouped) in groups) {
-      println("${pixel}: ${grouped.size}")
     }
 
     return Interpreter(modelFile, options).use { model ->
@@ -65,9 +60,6 @@ class Solver(
       val prediction = outputFloatArray.argmax(tensor.shape())
       val processedSequence = processCTCDecodedSequence(prediction, charset.size + 1)
       val result = indicesToSymbols(processedSequence.toIntArray())
-
-      // For the current hardcoded captcha (JXAPXW) this will give 'YY' prediction.
-      Log.d(TAG, "solve() result: ${result}")
 
       return@use result
     }
@@ -112,8 +104,7 @@ class Solver(
   }
 
   private fun convertBitmapToByteBuffer(pixels: IntArray, width: Int, height: Int): ByteBuffer {
-    // inputShape1 is [80, 300, 1] here
-    val inputShape1 = intArrayOf(height, width, 1)
+    val inputShape1 = intArrayOf(width, height, 1)
 
     val tensorBuffer = TensorBuffer.createFixedSize(inputShape1, DataType.FLOAT32)
     val floatArray = FloatArray(pixels.size)
@@ -128,11 +119,7 @@ class Solver(
       floatArray[index] = convertedPixelValue.coerceIn(0f, 1f)
     }
 
-    // inputShape2 is [1, 300, 80, 1] here
-    val inputShape2 = intArrayOf(1, width, height, 1)
-    val outArray = reshape(floatArray, inputShape2)
-
-    tensorBuffer.loadArray(outArray)
+    tensorBuffer.loadArray(floatArray)
     return tensorBuffer.buffer
   }
 

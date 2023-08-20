@@ -190,10 +190,10 @@ class MainActivity : ComponentActivity() {
           }
         }
       )
-
-      Spacer(modifier = Modifier.width(32.dp))
-
-      RunTestsButton()
+//
+//      Spacer(modifier = Modifier.width(32.dp))
+//
+//      RunTestsButton()
     }
 
     Spacer(modifier = Modifier.height(8.dp))

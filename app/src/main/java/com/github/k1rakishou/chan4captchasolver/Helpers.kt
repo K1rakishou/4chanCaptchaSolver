@@ -123,14 +123,14 @@ object Helpers {
     val height = imgHeight
     val th = 80
     val pw = 16
-    val scale = th / height
+    val scale = th / height.toFloat()
 
-    val cw = width * scale + pw * 2;
+    val cw = (width * scale + pw * 2).toInt()
 
     val canvasHeight = th
     val canvasWidth = if (cw >= 300) 300 else cw
 
-    val bitmap = Bitmap.createBitmap(canvasWidth, canvasHeight, Bitmap.Config.ARGB_8888)
+    val bitmap = Bitmap.createBitmap(canvasHeight, canvasWidth, Bitmap.Config.ARGB_8888)
     val fgBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
 
     var offset: Float? = customOffset
@@ -154,7 +154,7 @@ object Helpers {
       fgBitmap = fgBitmap
     )
 
-    val fBitmap = Bitmap.createBitmap(300, 80, Bitmap.Config.ARGB_8888)
+    val fBitmap = Bitmap.createBitmap(80, 300, Bitmap.Config.ARGB_8888)
     val fcanvas = Canvas(fBitmap)
 
     val src = Rect(0, 0, bitmap.width, bitmap.height)
@@ -188,25 +188,30 @@ object Helpers {
     paint: Paint,
     fgBitmap: Bitmap
   ) {
+    this.scale(-1f, 1f)
+    this.rotate(90f)
+
     // Fill the whole canvas with the captcha bg color (0xFFEEEEEE)
     this.drawRect(0f, 0f, this.width.toFloat(), this.height.toFloat(), paint)
 
-    if (bg != null) {
-      // Draw the background image in the center of the canvas with "currentOffset" px horizontal translation
-      this.withTranslation(x = -offset) {
-        kotlin.run {
-          val bitmap = Bitmap.createBitmap(bgWidth, height, Bitmap.Config.ARGB_8888)
+    val halfWidth = (bgWidth - width) / 2
+    this.withTranslation(x = halfWidth.toFloat()) {
+      if (bg != null) {
+        this.withTranslation(x = -offset) {
+          kotlin.run {
+            val bitmap = Bitmap.createBitmap(bgWidth, height, Bitmap.Config.ARGB_8888)
 
-          bitmap.setPixels(bg, 0, bgWidth, 0, 0, bgWidth, height)
-          this.drawBitmap(bitmap, 0f, 0f, null)
+            bitmap.setPixels(bg, 0, bgWidth, 0, 0, bgWidth, height)
+            this.drawBitmap(bitmap, 0f, 0f, null)
+          }
         }
       }
-    }
 
-    // Draw the foreground image in the center of the canvas
-    kotlin.run {
-      fgBitmap.setPixels(img, 0, width, 0, 0, width, height)
-      this.drawBitmap(fgBitmap, 0f, 0f, null)
+      // Draw the foreground image in the center of the canvas
+      kotlin.run {
+        fgBitmap.setPixels(img, 0, width, 0, 0, width, height)
+        this.drawBitmap(fgBitmap, 0f, 0f, null)
+      }
     }
   }
 
