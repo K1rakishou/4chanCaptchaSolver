@@ -36,6 +36,37 @@ android {
         }
     }
 
+    buildTypes {
+        release {
+            File propsFile = file('release.properties')
+            if (propsFile.exists()) {
+                Properties props = new Properties()
+                InputStream is = new FileInputStream(propsFile)
+                props.load(is)
+
+                signingConfigs {
+                    release {
+                        storeFile file(props['keystoreFile'])
+                        storePassword props['keystorePass']
+                        keyAlias props['keyAlias']
+                        keyPassword props['keyPass']
+
+                        v1SigningEnabled true
+                        v2SigningEnabled true
+                    }
+                }
+
+                is.close()
+                signingConfig signingConfigs.release
+            }
+
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard.cfg'
+
+            debuggable = false
+        }
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
