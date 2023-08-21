@@ -190,10 +190,10 @@ class MainActivity : ComponentActivity() {
           }
         }
       )
-//
-//      Spacer(modifier = Modifier.width(32.dp))
-//
-//      RunTestsButton()
+
+      Spacer(modifier = Modifier.width(32.dp))
+
+      RunTestsButton()
     }
 
     Spacer(modifier = Modifier.height(8.dp))
@@ -223,12 +223,6 @@ class MainActivity : ComponentActivity() {
             job = null
           }
 
-          // Some of the captchas in the captchas_for_tests.txt file have incorrect answers but
-          // those answers are the same in the browser script version
-          // (see https://github.com/AUTOMATIC1111/4chan-captcha-solver),
-          // meaning those are the bugs in the model itself which I can't fix (I am not a ML expert).
-          // They are still considered "correct" because the tests are only used to prove that the
-          // solutions received in this app are the same as the solutions from the script.
           val testCaptchas = loadTestCaptcha()
 
           currentTestIndex = 0

@@ -130,7 +130,7 @@ object Helpers {
     val canvasHeight = th
     val canvasWidth = if (cw >= 300) 300 else cw
 
-    val bitmap = Bitmap.createBitmap(canvasHeight, canvasWidth, Bitmap.Config.ARGB_8888)
+    val bitmap = Bitmap.createBitmap(canvasHeight, imgWidth, Bitmap.Config.ARGB_8888)
     val fgBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
 
     var offset: Float? = customOffset
@@ -164,8 +164,16 @@ object Helpers {
     val resultPixels = IntArray(fBitmap.width * fBitmap.height)
     fBitmap.getPixels(resultPixels, 0, fBitmap.width, 0, 0, fBitmap.width, fBitmap.height)
 
+    val adjustedScroll = if (customOffset == null && offset != null && bgBitmap != null) {
+      val slideWidth = bgBitmap.width - imgBitmap.width
+      Math.abs(offset) / Math.abs(slideWidth.toFloat())
+    } else {
+      null
+    }
+
     val resultImageData = ResultImageData(
       offset = offset,
+      adjustedScroll = adjustedScroll,
       width = fBitmap.width,
       height = fBitmap.height,
       bestImagePixels = resultPixels
@@ -192,26 +200,23 @@ object Helpers {
     this.rotate(90f)
 
     // Fill the whole canvas with the captcha bg color (0xFFEEEEEE)
-    this.drawRect(0f, 0f, this.width.toFloat(), this.height.toFloat(), paint)
+    this.drawRect(0f, 0f, this.height.toFloat(), this.width.toFloat(), paint)
 
-    val halfWidth = (bgWidth - width) / 2
-    this.withTranslation(x = halfWidth.toFloat()) {
-      if (bg != null) {
-        this.withTranslation(x = -offset) {
-          kotlin.run {
-            val bitmap = Bitmap.createBitmap(bgWidth, height, Bitmap.Config.ARGB_8888)
+    if (bg != null) {
+      this.withTranslation(x = -offset) {
+        kotlin.run {
+          val bitmap = Bitmap.createBitmap(bgWidth, height, Bitmap.Config.ARGB_8888)
 
-            bitmap.setPixels(bg, 0, bgWidth, 0, 0, bgWidth, height)
-            this.drawBitmap(bitmap, 0f, 0f, null)
-          }
+          bitmap.setPixels(bg, 0, bgWidth, 0, 0, bgWidth, height)
+          this.drawBitmap(bitmap, 0f, 0f, null)
         }
       }
+    }
 
-      // Draw the foreground image in the center of the canvas
-      kotlin.run {
-        fgBitmap.setPixels(img, 0, width, 0, 0, width, height)
-        this.drawBitmap(fgBitmap, 0f, 0f, null)
-      }
+    // Draw the foreground image in the center of the canvas
+    kotlin.run {
+      fgBitmap.setPixels(img, 0, width, 0, 0, width, height)
+      this.drawBitmap(fgBitmap, 0f, 0f, null)
     }
   }
 
@@ -283,6 +288,7 @@ object Helpers {
 
   class ResultImageData(
     val offset: Float?,
+    val adjustedScroll: Float?,
     val width: Int,
     val height: Int,
     val bestImagePixels: IntArray

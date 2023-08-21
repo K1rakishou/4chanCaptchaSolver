@@ -107,7 +107,7 @@ class SolverBoardcastReceiver : BroadcastReceiver() {
     )
 
     val width = resultImageData.width
-    val adjustedScroll = resultImageData.offset
+    val adjustedScroll = resultImageData.adjustedScroll
 
     val adjustedScrollValue = if (scrollValue == null && adjustedScroll != null) {
       adjustedScroll
