@@ -25,24 +25,6 @@ class SolverApp : Application() {
     super.onCreate()
 
     LogcatLogger.install(SolverLogger())
-    registerUpdater()
-  }
-
-  private fun registerUpdater() {
-    val constraints = Constraints.Builder()
-      .setRequiredNetworkType(NetworkType.CONNECTED)
-      .build()
-
-    val updateCheckerRequest = PeriodicWorkRequest.Builder(UpdateCheckerWorker::class.java, 1, TimeUnit.DAYS)
-      .setConstraints(constraints)
-      .setInitialDelay(1, TimeUnit.MINUTES)
-      .build()
-
-    WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-      "update_checker",
-      ExistingPeriodicWorkPolicy.KEEP,
-      updateCheckerRequest
-    )
   }
 
   private class SolverLogger : LogcatLogger {

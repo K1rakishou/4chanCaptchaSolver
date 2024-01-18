@@ -1,6 +1,7 @@
 package com.github.k1rakishou.chan4captchasolver
 
 import android.Manifest
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.os.Build
 import android.os.Bundle
@@ -50,19 +51,91 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import androidx.core.graphics.withScale
 import androidx.core.graphics.withTranslation
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequest
+import androidx.work.WorkManager
 import com.github.k1rakishou.chan4captchasolver.data.CaptchaInfo
 import com.github.k1rakishou.chan4captchasolver.ui.compose.KurobaComposeSnappingSlider
 import com.github.k1rakishou.chan4captchasolver.ui.theme.Chan4CaptchaSolverTheme
+import com.github.k1rakishou.chan4captchasolver.updater.UpdateCheckerWorker
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import logcat.logcat
+import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
   private val moshi by Dependencies.moshi
   private val sharedPrefs by Dependencies.sharedPreferences
   private val solver by lazy { Solver(this.applicationContext) }
+
+  private val permissionRequestCode = 1337
+
+  @Deprecated("Deprecated in Java")
+  override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+    super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+
+    if (requestCode == permissionRequestCode) {
+      val granted = grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
+      logcat { "onRequestPermissionsResult() got result, granted: ${granted}" }
+
+      if (granted) {
+        registerUpdater()
+
+        return
+      }
+    }
+  }
+
+  private fun requestPostNotificationsPermission() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+      logcat { "onRequestPermissionsResult() Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU" }
+      registerUpdater()
+      return
+    }
+
+    if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+      logcat { "onRequestPermissionsResult() permission already granted" }
+      registerUpdater()
+      return
+    }
+
+    val key = "api_33_notification_permission_requested"
+
+    val notificationPermissionRequested = sharedPrefs.getBoolean(key, false)
+    if (notificationPermissionRequested) {
+      logcat { "onRequestPermissionsResult() permission was already requested once" }
+      return
+    }
+
+    requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), permissionRequestCode)
+    sharedPrefs.edit { putBoolean(key, true) }
+
+    logcat { "onRequestPermissionsResult() requesting POST_NOTIFICATIONS permission" }
+  }
+
+  private fun registerUpdater() {
+    logcat { "registerUpdater()" }
+
+    val constraints = Constraints.Builder()
+      .setRequiredNetworkType(NetworkType.CONNECTED)
+      .build()
+
+    val updateCheckerRequest = PeriodicWorkRequest.Builder(UpdateCheckerWorker::class.java, 1, TimeUnit.DAYS)
+      .setConstraints(constraints)
+      .setInitialDelay(1, TimeUnit.MINUTES)
+      .build()
+
+    WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+      "update_checker",
+      ExistingPeriodicWorkPolicy.KEEP,
+      updateCheckerRequest
+    )
+  }
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
@@ -87,22 +160,6 @@ class MainActivity : ComponentActivity() {
         }
       }
     }
-  }
-
-  private fun requestPostNotificationsPermission() {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-      return
-    }
-
-    val key = "api_33_notification_permission_requested"
-
-    val notificationPermissionRequested = sharedPrefs.getBoolean(key, false)
-    if (notificationPermissionRequested) {
-      return
-    }
-
-    requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
-    sharedPrefs.edit { putBoolean(key, true) }
   }
 
   @Composable
