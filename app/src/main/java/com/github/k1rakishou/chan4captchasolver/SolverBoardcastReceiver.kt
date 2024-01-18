@@ -81,7 +81,7 @@ class SolverBoardcastReceiver : BroadcastReceiver() {
     val captchaInfo = intent.getStringExtra(ACTION_SOLVE_CAPTCHA_JSON)
       ?.let { captchaJson ->
         try {
-          return@let Helpers.getCaptchaInfo(moshi, captchaJson)
+          return@let SolverHelpers.getCaptchaInfo(moshi, captchaJson)
         } catch (error: Throwable) {
           Log.e(TAG, "moshi.fromJson(CaptchaInfo) error", error)
           return@let null
@@ -101,7 +101,7 @@ class SolverBoardcastReceiver : BroadcastReceiver() {
       scrollValue * captchaInfo.widthDiff()
     }
 
-    val resultImageData = Helpers.combineBgWithFgWithBestDisorder(
+    val resultImageData = SolverHelpers.combineBgWithFgWithBestDisorder(
       captchaInfo = captchaInfo,
       customOffset = offset
     )

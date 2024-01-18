@@ -1,6 +1,8 @@
 package com.github.k1rakishou.chan4captchasolver
 
+import android.Manifest
 import android.graphics.Bitmap
+import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -45,6 +47,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.core.content.edit
 import androidx.core.graphics.withScale
 import androidx.core.graphics.withTranslation
 import com.github.k1rakishou.chan4captchasolver.data.CaptchaInfo
@@ -58,10 +61,13 @@ import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
   private val moshi by Dependencies.moshi
+  private val sharedPrefs by Dependencies.sharedPreferences
   private val solver by lazy { Solver(this.applicationContext) }
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+
+    requestPostNotificationsPermission()
 
     setContent {
       Chan4CaptchaSolverTheme {
@@ -83,9 +89,25 @@ class MainActivity : ComponentActivity() {
     }
   }
 
+  private fun requestPostNotificationsPermission() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+      return
+    }
+
+    val key = "api_33_notification_permission_requested"
+
+    val notificationPermissionRequested = sharedPrefs.getBoolean(key, false)
+    if (notificationPermissionRequested) {
+      return
+    }
+
+    requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+    sharedPrefs.edit { putBoolean(key, true) }
+  }
+
   @Composable
   private fun BuildCaptchaWindow() {
-    val captchaInfo = remember { Helpers.getCaptchaInfo(moshi, loadCaptcha()) }
+    val captchaInfo = remember { SolverHelpers.getCaptchaInfo(moshi, loadCaptcha()) }
 
     BuildCaptchaWindowImageOrText(captchaInfo)
 
@@ -236,9 +258,9 @@ class MainActivity : ComponentActivity() {
 
             val captchaJson = pair.first
             val captchaAnswer = pair.second
-            val captchaInfo = Helpers.getCaptchaInfo(moshi, captchaJson)!!
+            val captchaInfo = SolverHelpers.getCaptchaInfo(moshi, captchaJson)!!
 
-            val resultImageData = Helpers.combineBgWithFgWithBestDisorder(
+            val resultImageData = SolverHelpers.combineBgWithFgWithBestDisorder(
               captchaInfo = captchaInfo,
               customOffset = null
             )
@@ -287,7 +309,7 @@ class MainActivity : ComponentActivity() {
         scrollValue * captchaInfo.widthDiff()
       }
 
-      val resultImageData = Helpers.combineBgWithFgWithBestDisorder(
+      val resultImageData = SolverHelpers.combineBgWithFgWithBestDisorder(
         captchaInfo = captchaInfo,
         customOffset = offset
       )
