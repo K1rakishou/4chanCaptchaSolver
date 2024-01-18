@@ -2,7 +2,7 @@
 
 ~The model is taken from https://github.com/AUTOMATIC1111/4chan-captcha-solver and converted into tflite format.~
 
-Thanks to @Yukariin for the new model.
+Thanks to @Yukariin for the new models.
 
 # How to use
 - Go to https://github.com/K1rakishou/4chanCaptchaSolver/releases and find the latest release.
