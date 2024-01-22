@@ -81,10 +81,10 @@ class UpdateCheckerWorker(
       return
     }
 
-    logcat { "doWorkInternal() displaying notification for new latest version ${lastCheckedVersion} with url `${htmlUrl}`" }
+    logcat { "doWorkInternal() displaying notification for new latest version ${latestVersion} with url `${htmlUrl}`" }
     NotificationHelper.showUpdateNotification(appContext, latestVersion, htmlUrl)
 
-    logcat { "doWorkInternal() updating last checked version" }
+    logcat { "doWorkInternal() updating last checked version with ${latestVersion}" }
     sharedPreferences.edit {
       putFloat(lastCheckedVersionKey, latestVersion)
     }
