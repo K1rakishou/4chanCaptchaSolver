@@ -3,15 +3,8 @@ package com.github.k1rakishou.chan4captchasolver
 import android.app.Application
 import android.content.Context
 import android.util.Log
-import androidx.work.Constraints
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.PeriodicWorkRequest
-import androidx.work.WorkManager
-import com.github.k1rakishou.chan4captchasolver.updater.UpdateCheckerWorker
 import logcat.LogPriority
 import logcat.LogcatLogger
-import java.util.concurrent.TimeUnit
 
 
 class SolverApp : Application() {

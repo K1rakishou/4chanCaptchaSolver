@@ -53,7 +53,9 @@ import androidx.core.graphics.withScale
 import androidx.core.graphics.withTranslation
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequest
 import androidx.work.PeriodicWorkRequest
 import androidx.work.WorkManager
 import com.github.k1rakishou.chan4captchasolver.data.CaptchaInfo
@@ -75,6 +77,8 @@ class MainActivity : ComponentActivity() {
 
   private val permissionRequestCode = 1337
 
+  private var forceUpdateCheck = false
+
   @Deprecated("Deprecated in Java")
   override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
     super.onRequestPermissionsResult(requestCode, permissions, grantResults)
@@ -84,23 +88,25 @@ class MainActivity : ComponentActivity() {
       logcat { "onRequestPermissionsResult() got result, granted: ${granted}" }
 
       if (granted) {
-        registerUpdater()
-
+        registerUpdater(forceUpdateCheck)
+        forceUpdateCheck = false
         return
       }
     }
   }
 
-  private fun requestPostNotificationsPermission() {
+  private fun requestPostNotificationsPermission(forceCheck: Boolean) {
+    forceUpdateCheck = forceCheck
+
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
       logcat { "onRequestPermissionsResult() Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU" }
-      registerUpdater()
+      registerUpdater(forceCheck)
       return
     }
 
     if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
       logcat { "onRequestPermissionsResult() permission already granted" }
-      registerUpdater()
+      registerUpdater(forceCheck)
       return
     }
 
@@ -118,29 +124,45 @@ class MainActivity : ComponentActivity() {
     logcat { "onRequestPermissionsResult() requesting POST_NOTIFICATIONS permission" }
   }
 
-  private fun registerUpdater() {
-    logcat { "registerUpdater()" }
+  private fun registerUpdater(forceCheck: Boolean) {
+    logcat { "registerUpdater($forceCheck)" }
 
     val constraints = Constraints.Builder()
       .setRequiredNetworkType(NetworkType.CONNECTED)
       .build()
 
-    val updateCheckerRequest = PeriodicWorkRequest.Builder(UpdateCheckerWorker::class.java, 1, TimeUnit.DAYS)
-      .setConstraints(constraints)
-      .setInitialDelay(1, TimeUnit.MINUTES)
-      .build()
+    if (forceCheck) {
+      logcat { "Enqueueing onetime work request" }
 
-    WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-      "update_checker",
-      ExistingPeriodicWorkPolicy.KEEP,
-      updateCheckerRequest
-    )
+      val updateCheckerRequest = OneTimeWorkRequest.Builder(UpdateCheckerWorker::class.java)
+        .setConstraints(constraints)
+        .build()
+
+      WorkManager.getInstance(this).enqueueUniqueWork(
+        "update_checker_unique",
+        ExistingWorkPolicy.REPLACE,
+        updateCheckerRequest
+      )
+    } else {
+      logcat { "Enqueueing periodic work request" }
+
+      val updateCheckerRequest = PeriodicWorkRequest.Builder(UpdateCheckerWorker::class.java, 1, TimeUnit.DAYS)
+        .setConstraints(constraints)
+        .setInitialDelay(1, TimeUnit.MINUTES)
+        .build()
+
+      WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+        "update_checker",
+        ExistingPeriodicWorkPolicy.KEEP,
+        updateCheckerRequest
+      )
+    }
   }
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
 
-    requestPostNotificationsPermission()
+    requestPostNotificationsPermission(forceCheck = false)
 
     setContent {
       Chan4CaptchaSolverTheme {
@@ -270,9 +292,16 @@ class MainActivity : ComponentActivity() {
         }
       )
 
-      Spacer(modifier = Modifier.width(32.dp))
+      Spacer(modifier = Modifier.width(16.dp))
 
       RunTestsButton()
+
+      Spacer(modifier = Modifier.width(16.dp))
+
+      Button(
+        onClick = { requestPostNotificationsPermission(forceCheck = true) },
+        content = { Text(text = "Updates") }
+      )
     }
 
     Spacer(modifier = Modifier.height(8.dp))
