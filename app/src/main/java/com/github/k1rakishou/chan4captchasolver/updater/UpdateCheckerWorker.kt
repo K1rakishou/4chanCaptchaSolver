@@ -39,8 +39,10 @@ class UpdateCheckerWorker(
     val lastCheckedVersion = sharedPreferences.getFloat(lastCheckedVersionKey, 0.0f)
     val currentVersion = Dependencies.appVersionCode
 
+    logcat { "doWorkInternal() lastCheckedVersion (${lastCheckedVersion}), currentVersion (${currentVersion})" }
+
     if (lastCheckedVersion >= currentVersion) {
-      logcat { "doWorkInternal() lastCheckedVersion (${lastCheckedVersion}) >= currentVersion (${currentVersion})" }
+      logcat { "doWorkInternal() skipping because lastCheckedVersion (${lastCheckedVersion}) >= currentVersion (${currentVersion})" }
       return
     }
 
@@ -76,8 +78,10 @@ class UpdateCheckerWorker(
 
     val htmlUrl = githubLatestRelease.htmlUrl
 
+    logcat { "doWorkInternal() latestVersion (${latestVersion}) lastCheckedVersion (${lastCheckedVersion})" }
+
     if (latestVersion <= lastCheckedVersion) {
-      logcat { "doWorkInternal() latestVersion (${latestVersion}) <= lastCheckedVersion (${lastCheckedVersion})" }
+      logcat { "doWorkInternal() skipping because latestVersion (${latestVersion}) <= lastCheckedVersion (${lastCheckedVersion})" }
       return
     }
 
