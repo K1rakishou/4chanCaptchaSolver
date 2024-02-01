@@ -91,7 +91,7 @@ class UpdateCheckerWorker(
     logcat { "doWorkInternal() updating last checked version with ${latestVersion}" }
     sharedPreferences.edit {
       putFloat(lastCheckedVersionKey, latestVersion)
-    }
+    }.commit()
 
     logcat { "doWorkInternal() done" }
   }
