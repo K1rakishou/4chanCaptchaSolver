@@ -119,7 +119,7 @@ class MainActivity : ComponentActivity() {
     }
 
     requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), permissionRequestCode)
-    sharedPrefs.edit { putBoolean(key, true) }
+    sharedPrefs.edit(commit = true) { putBoolean(key, true) }
 
     logcat { "onRequestPermissionsResult() requesting POST_NOTIFICATIONS permission" }
   }

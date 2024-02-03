@@ -89,9 +89,9 @@ class UpdateCheckerWorker(
     NotificationHelper.showUpdateNotification(appContext, latestVersion, htmlUrl)
 
     logcat { "doWorkInternal() updating last checked version with ${latestVersion}" }
-    sharedPreferences.edit {
+    sharedPreferences.edit(commit = true) {
       putFloat(lastCheckedVersionKey, latestVersion)
-    }.commit()
+    }
 
     logcat { "doWorkInternal() done" }
   }
