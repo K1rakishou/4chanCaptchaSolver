@@ -3,6 +3,7 @@ package com.github.k1rakishou.chan4captchasolver
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
 import android.util.Base64
@@ -220,70 +221,176 @@ object SolverHelpers {
     }
   }
 
-  fun pxlBlackOrWhite(r: Int, g: Int, b: Int): Int {
+  private fun pxlBlackOrWhite(r: Int, g: Int, b: Int): Int {
     return if (r + g + b > 384) 0 else 1
   }
 
-  fun getBoundaries(img: Bitmap): List<IntArray> {
-    val width = img.width
-    val height = img.height
-    val chkArray = mutableListOf<IntArray>()
+  private fun getBoundaries(bitmap: Bitmap): List<Triple<Int, Int, Int>> {
+    val width = bitmap.width
+    val height = bitmap.height
+    val chkArray = mutableListOf<Triple<Int, Int, Int>>()  // Store the boundary data
+    var i = width * height * 4 - 1  // Similar to JavaScript, going backward through pixel data
+    var opq = true  // Tracks opaque/transparent state
 
-    var opq = true
-    for (y in 0 until height) {
-      for (x in 0 until width) {
-        val pixel = img.getPixel(x, y)
-        val alpha = (pixel shr 24) and 0xff
-        val red = (pixel shr 16) and 0xff
-        val green = (pixel shr 8) and 0xff
-        val blue = pixel and 0xff
+    while (i > 0) {
+      // Get the x and y coordinates for the pixel
+      val x = (i / 4) % width
+      val y = (i / 4) / width
 
-        val a = alpha > 128
-        if (a != opq) {
-          val clr = pxlBlackOrWhite(red, green, blue)
-          chkArray.add(intArrayOf(x, y, clr))
-          opq = a
+      // Get the pixel's alpha value
+      val pixel = bitmap.getPixel(x, y)
+      val alpha = Color.alpha(pixel)
+      val isOpaque = alpha > 128  // Same logic as in JavaScript
+
+      // Compare with the previous state (opq)
+      if (isOpaque != opq) {
+        // Avoid 1-width areas by checking neighboring pixel
+        if ((i - 4) >= 0) {
+          val neighborX = ((i - 4) / 4) % width
+          val neighborY = ((i - 4) / 4) / width
+          val neighborPixel = bitmap.getPixel(neighborX, neighborY)
+          val neighborAlpha = Color.alpha(neighborPixel)
+          if ((neighborAlpha > 128) == opq) {
+            i -= 4  // Move to the next pixel
+            continue
+          }
         }
+
+        // Determine if the transition was from transparent to opaque or vice versa
+        if (isOpaque) {
+          // Transition from transparent to opaque, check the next pixel
+          val nextPixel = bitmap.getPixel(x, y)
+          val clr = pxlBlackOrWhite(Color.red(nextPixel), Color.green(nextPixel), Color.blue(nextPixel))
+          chkArray.add(Triple(x, y, clr))
+        } else {
+          // Transition from opaque to transparent, check the previous pixel
+          val prevX = ((i - 3) / 4) % width
+          val prevY = ((i - 3) / 4) / width
+          val prevPixel = bitmap.getPixel(prevX, prevY)
+          val clr = pxlBlackOrWhite(Color.red(prevPixel), Color.green(prevPixel), Color.blue(prevPixel))
+          chkArray.add(Triple(prevX, prevY, clr))
+        }
+
+        // Update the opaque state
+        opq = isOpaque
       }
+
+      // Move to the previous pixel (step back by 4 to match the RGBA structure)
+      i -= 4
     }
+
     return chkArray
   }
 
-  fun getBestPos(bg: Bitmap, chkArray: List<IntArray>, slideWidth: Int): Float {
+  private fun getBestPos(bg: Bitmap, chkArray: List<Triple<Int, Int, Int>>, slideWidth: Int): Float {
     val width = bg.width
+    val height = bg.height
     var bestSimilarity = 0
     var bestPos = 0
 
+    // Iterate over all possible slide positions (from 0 to slideWidth)
     for (s in 0..slideWidth) {
       var similarity = 0
-      for (chk in chkArray) {
-        val x = chk[0] + s
-        val y = chk[1]
-        val clr = chk[2]
+      val amount = chkArray.size
 
+      // Check each pixel in chkArray
+      for (p in 0 until amount) {
+        val chk = chkArray[p]
+        val x = chk.first + s
+        val y = chk.second
+        val clr = chk.third
+
+        // Check bounds to avoid accessing out-of-bounds pixels
+        if (x >= width || y >= height || x < 0 || y < 0) continue
+
+        // Get the background pixel at (x, y)
         val pixel = bg.getPixel(x, y)
-        val red = (pixel shr 16) and 0xff
-        val green = (pixel shr 8) and 0xff
-        val blue = pixel and 0xff
+        val r = Color.red(pixel)
+        val g = Color.green(pixel)
+        val b = Color.blue(pixel)
 
-        val bgClr = pxlBlackOrWhite(red, green, blue)
-        if (bgClr == clr) {
-          similarity++
+        // Determine if the background pixel is black or white
+        val bgclr = pxlBlackOrWhite(r, g, b)
+
+        // Compare the background color with the chkArray color
+        if (bgclr == clr) {
+          similarity += 1
         }
       }
+
+      // Update the best position if current similarity is higher
       if (similarity > bestSimilarity) {
         bestSimilarity = similarity
         bestPos = s
       }
     }
-    return (bestPos.toFloat() / slideWidth) * 100f
+
+    // Return the best position as a percentage
+    return bestPos.toFloat() / slideWidth * 100
   }
 
-  fun slideCaptcha(imgBitmap: Bitmap, bgBitmap: Bitmap): Float {
-    val chkArray = getBoundaries(imgBitmap)
-    val slideWidth = bgBitmap.width - imgBitmap.width
-    val sliderPos = getBestPos(bgBitmap, chkArray, slideWidth)
+  private fun slideCaptcha(imgBitmap: Bitmap, bgBitmap: Bitmap): Float {
+    val imgBitmapPostProcessed = removeNoise(bitmap = imgBitmap, noiseThreshold = 1)
+    val bgBitmapPostProcessed = removeNoise(bitmap = bgBitmap, noiseThreshold = 1)
+
+    val chkArray = getBoundaries(imgBitmapPostProcessed)
+    val slideWidth = bgBitmapPostProcessed.width - imgBitmapPostProcessed.width
+    val sliderPos = getBestPos(bgBitmapPostProcessed, chkArray, slideWidth)
     return sliderPos / 2
+  }
+
+  private fun removeNoise(bitmap: Bitmap, noiseThreshold: Int): Bitmap {
+    val width = bitmap.width
+    val height = bitmap.height
+    val mutableBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+
+    // Function to mark clusters and decide whether to remove them
+    fun markCluster(x: Int, y: Int, marked: Array<BooleanArray>, clusterSize: Int) {
+      val stack = mutableListOf(Pair(x, y))
+      val cluster = mutableListOf<Pair<Int, Int>>()
+
+      while (stack.isNotEmpty()) {
+        val (cx, cy) = stack.removeAt(stack.size - 1)
+
+        if (cx < 0 || cy < 0 || cx >= width || cy >= height || marked[cy][cx]) continue
+
+        val pixel = mutableBitmap.getPixel(cx, cy)
+        val alpha = Color.alpha(pixel)
+
+        // Check if it's an opaque pixel
+        if (alpha >= 128) {
+          cluster.add(Pair(cx, cy))
+          marked[cy][cx] = true
+
+          // Add neighbors to stack
+          stack.add(Pair(cx - 1, cy))
+          stack.add(Pair(cx + 1, cy))
+          stack.add(Pair(cx, cy - 1))
+          stack.add(Pair(cx, cy + 1))
+        }
+      }
+
+      if (cluster.size <= clusterSize) {
+        // If the cluster is small, mark it for removal
+        for ((cx, cy) in cluster) {
+          mutableBitmap.setPixel(cx, cy, Color.TRANSPARENT)
+        }
+      }
+    }
+
+    // Create an array to mark the processed pixels
+    val marked = Array(height) { BooleanArray(width) }
+
+    // Iterate over the pixels and process them
+    for (y in 0 until height) {
+      for (x in 0 until width) {
+        if (!marked[y][x]) {
+          markCluster(x, y, marked, noiseThreshold)
+        }
+      }
+    }
+
+    return mutableBitmap
   }
 
   class ResultImageData(
